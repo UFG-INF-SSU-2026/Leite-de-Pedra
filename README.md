@@ -237,7 +237,6 @@ O sistema pode ser classificado como:
 
 - **Rede de sensores**, pois utiliza leitores distribuídos no ambiente;
 - **IoT**, pois dispositivos físicos enviam informações pela rede;
-- **Sistema ciberfísico**, pois eventos físicos alteram o estado digital;
 - **Aplicação ubíqua**, classificação principal, porque o sistema está integrado ao ambiente, percebe contexto e reage com pouca intervenção do usuário.
 
 ---
