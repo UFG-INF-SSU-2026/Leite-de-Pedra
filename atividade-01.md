@@ -15,16 +15,17 @@
 **Cenário escolhido:** Balanceamento de fluxo de fila em entrada única de eventos (shows, jogos, eventos geridos via uma plataforma de ticketeira genérica)
 
 ---
-
-## Nota de revisão (v2)
-
-Em relação à primeira versão, simplificamos a camada de sensoriamento: em vez de uma câmera dedicada em ângulo top-down associada a um dispositivo de borda (Raspberry Pi) por catraca, o sensor passa a ser a **câmera de um celular ou tablet já usado no ponto de validação de ingresso**, rodando um software de contagem configurável em dois modos:
-
+ 
+## Nota de revisão
+ 
+Esta atividade passou por uma **troca de tema**: a proposta inicial do grupo era uma Biblioteca Inteligente Ubíqua com RFID e recomendação contextual por zonas/setores. O grupo optou por trocar para o cenário de balanceamento de fluxo de fila em entrada única de eventos, documentado a partir daqui.
+ 
+Dentro desse novo tema, a camada de sensoriamento também já nasce simplificada em relação à primeira formulação da ideia de fila: em vez de uma câmera dedicada em ângulo top-down associada a um dispositivo de borda (Raspberry Pi) por catraca, o sensor passa a ser a **câmera de um celular ou tablet já usado no ponto de validação de ingresso**, rodando um software de contagem configurável em dois modos:
+ 
 - **Modo QR Code** — validação lendo o código do ingresso;
 - **Modo Reconhecimento facial** — validação por comparação entre o rosto capturado e a foto associada a um ingresso nominal.
-
-A lógica central (vazão móvel, histerese, recomendação de fila) não muda. O que muda é (a) o sensor+gateway, que passam a ser o mesmo dispositivo, e (b) o perfil de risco de privacidade, que agora depende do modo escolhido — detalhado na seção 5.
-
+A lógica central (vazão móvel, histerese, recomendação de fila) não muda. O que muda é o sensor+gateway, que passam a ser o mesmo dispositivo.
+ 
 ---
 
 ## Parte 1 — Compreensão do problema
