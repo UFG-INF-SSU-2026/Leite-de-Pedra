@@ -102,6 +102,23 @@ python3 -u observador.py        # terminal 3
 python3 -u produtor.py          # terminal 4
 ```
 
+### Quantas filas
+
+O produtor aceita 2, 3 ou 4 filas; sem argumento, usa 2.
+
+```
+python3 -u produtor.py 4
+```
+
+**Só o produtor recebe esse parâmetro.** O consumidor descobre as filas pelos
+tópicos que chegam — ele assina `fila/+/contagem`, então não precisa saber
+quantas existem, nem ser reiniciado quando o produtor sobe com outra
+quantidade. O observador também não, porque assina `fila/#`.
+
+Cada fila tem o seu próprio validador, então acrescentar filas acrescenta
+capacidade na mesma medida. Com mais filas, um pico se dilui melhor: a carga
+desviada se reparte entre todas as outras em vez de cair sobre uma só.
+
 O `-u` evita que o Python segure a saída em buffer — sem ele os logs aparecem
 em blocos e a demonstração perde o tempo real.
 

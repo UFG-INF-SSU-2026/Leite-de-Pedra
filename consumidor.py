@@ -9,7 +9,10 @@ TOPICO_CONTAGEM = "fila/+/contagem"
 TOPICO_VALIDACAO = "fila/+/validacao"
 TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
 
-filas = ["fila-a", "fila-b"]
+# As filas não são declaradas: o consumidor as descobre pelos tópicos que
+# chegam. Assim ele não precisa ser reiniciado nem reconfigurado quando o
+# produtor sobe com outra quantidade de filas.
+filas = []
 
 LIMITE_ATENCAO = 5
 LIMITE_BLOQUEIO = 10
@@ -28,16 +31,30 @@ CORES = {
 
 INTERVALO_PAINEL = 2
 
-entradas = {fila: 0 for fila in filas}
-saidas = {fila: 0 for fila in filas}
-fila_saidas = {fila: deque(maxlen=20) for fila in filas}
-semaforo = {fila: "livre" for fila in filas}
-ultima_publicacao = {fila: None for fila in filas}
-ultimo_heartbeat = {fila: None for fila in filas}
+entradas = {}
+saidas = {}
+fila_saidas = {}
+semaforo = {}
+ultima_publicacao = {}
+ultimo_heartbeat = {}
+
+def registrar(fila):
+    if fila in entradas:
+        return
+    entradas[fila] = 0
+    saidas[fila] = 0
+    fila_saidas[fila] = deque(maxlen=20)
+    semaforo[fila] = "livre"
+    ultima_publicacao[fila] = None
+    ultimo_heartbeat[fila] = None
+    filas.append(fila)
+    filas.sort()
+    print(f"Fila descoberta: {fila} ({len(filas)} no total)")
 
 def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
     fila = payload["filaId"]
+    registrar(fila)
 
     if msg.topic.endswith("/contagem"):
         entradas[fila] += 1

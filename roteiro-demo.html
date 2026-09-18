@@ -201,7 +201,16 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
     </div>
     <div class="prose">
       <p>O <code>-u</code> não é detalhe: sem ele o Python segura a saída em buffer e a demonstração perde o tempo real, que é justamente o que está sendo mostrado.</p>
-      <p><strong>Consumidor no maior terminal</strong> — é onde o semáforo aparece. O observador vem logo depois; ele é quem mostra a latência.</p>
+      <p><strong>Consumidor no maior terminal</strong> — é onde o painel aparece. O observador vem logo depois; ele é quem mostra a latência.</p>
+      <p><strong>Para mostrar mais filas</strong>, passe a quantidade ao produtor — 2, 3 ou 4:</p>
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">quantas filas</span></div>
+<pre>python3 -u produtor.py 4</pre>
+    </div>
+    <div class="say">
+      <span class="lbl">vale dizer, se perguntarem</span>
+      <em>Só o produtor recebe esse número. O consumidor descobre as filas pelos tópicos que chegam — ele assina <code>fila/+/contagem</code> e não precisa saber quantas existem. Trocar a quantidade não exige reiniciar nem reconfigurar o outro lado.</em>
     </div>
   </section>
 

@@ -6,19 +6,44 @@ import itertools
 import time
 import random
 import threading
+import sys
 
 TOPICO_CONTAGEM = "fila/{}/contagem"
 TOPICO_VALIDACAO = "fila/{}/validacao"
 TOPICO_HEARTBEAT = "fila/{}/heartbeat"
 TOPICO_RECOMENDACAO = "fila/+/recomendacao"
 
-filas = ["fila-a", "fila-b"]
+QUANTIDADE_PADRAO = 2
+QUANTIDADE_MAXIMA = 4
 
-# Regime normal: as duas filas recebem menos gente do que os validadores
-# conseguem atender, então ambas ficam verdes e ninguém é desviado.
-INTERVALO_CHEGADA = {"fila-a": 1.5, "fila-b": 2.0}
-INTERVALO_ATENDIMENTO = {"fila-a": 0.8, "fila-b": 0.8}
+def filas_configuradas():
+    if len(sys.argv) < 2:
+        return QUANTIDADE_PADRAO
+    try:
+        quantidade = int(sys.argv[1])
+    except ValueError:
+        quantidade = 0
+    if not 2 <= quantidade <= QUANTIDADE_MAXIMA:
+        print(f"uso: python3 produtor.py [2..{QUANTIDADE_MAXIMA}]   (padrão {QUANTIDADE_PADRAO})")
+        sys.exit(1)
+    return quantidade
+
+quantidade = filas_configuradas()
+filas = [f"fila-{chr(ord('a') + i)}" for i in range(quantidade)]
+
+# Regime normal: cada fila recebe menos gente do que o seu validador consegue
+# atender, então todas ficam verdes e ninguém é desviado. Cada validador atende
+# só a sua fila, então acrescentar filas acrescenta capacidade na mesma medida.
+INTERVALO_CHEGADA_BASE = 1.5
+INTERVALO_ATENDIMENTO_BASE = 0.8
 TAXA_REPROVACAO = 0.15
+
+# Preferência natural do público pelas primeiras entradas: quanto mais adiante a
+# fila, menos gente procura por ela espontaneamente.
+INTERVALO_CHEGADA = {
+    fila: INTERVALO_CHEGADA_BASE * (1 + 0.2 * i) for i, fila in enumerate(filas)
+}
+INTERVALO_ATENDIMENTO = {fila: INTERVALO_ATENDIMENTO_BASE for fila in filas}
 
 # Picos de entrada periódicos, alternando de fila. Num evento real os picos se
 # repetem e não se concentram sempre na mesma entrada; repetir também garante
@@ -151,6 +176,8 @@ client.on_connect = on_connect
 client.on_message = on_recomendacao
 client.connect("localhost", 1883, 60)
 client.loop_start()
+
+print(f"Produtor com {quantidade} filas: {', '.join(filas)}\n")
 
 for fila in filas:
     threading.Thread(target=simular_chegadas, args=(client, fila), daemon=True).start()
