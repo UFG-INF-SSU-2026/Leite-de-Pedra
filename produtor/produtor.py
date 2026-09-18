@@ -7,6 +7,11 @@ import time
 import random
 import threading
 import sys
+from pathlib import Path
+
+# O banco é um só, na raiz, e serve aos três componentes.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banco import BancoEmMemoria
 
 TOPICO_CONTAGEM = "fila/{}/contagem"
 TOPICO_VALIDACAO = "fila/{}/validacao"
@@ -79,6 +84,7 @@ def intervalo_de_chegada(fila):
 # Estado do mundo físico simulado e da comunicação.
 na_fila = {fila: 0 for fila in filas}
 destino_atual = {fila: fila for fila in filas}
+motivo_atual = {fila: None for fila in filas}
 
 contador = {
     "contagem": itertools.count(1),
@@ -86,6 +92,7 @@ contador = {
     "heartbeat": itertools.count(1),
 }
 
+banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
 fila_local = deque(maxlen=200)
 trava_envio = threading.Lock()
 trava_fila = threading.Lock()
@@ -174,6 +181,7 @@ def simular_chegadas(client, fila):
         publicar_evento(client, escolhida, "contagem")
         if escolhida != fila:
             print(f"   (desvio: chegou em {fila}, entrou em {escolhida} - {presentes} na fila)")
+            print(f"   motivo: {motivo_atual[fila]}")
         else:
             print(f"   (infravermelho {fila}: {presentes} pessoas na fila)")
 
@@ -197,7 +205,9 @@ def simular_heartbeats(client):
 
 def on_recomendacao(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
+    banco.inserir(msg.topic, payload)
     destino_atual[payload["filaId"]] = payload["sentidoRecomendado"]
+    motivo_atual[payload["filaId"]] = payload.get("motivo")
 
 def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPICO_RECOMENDACAO)

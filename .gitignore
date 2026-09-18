@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+.venv
+eventos.json
+eventos.json.tmp

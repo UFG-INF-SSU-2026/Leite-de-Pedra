@@ -5,6 +5,12 @@ from collections import deque
 from datetime import datetime, timedelta
 import threading
 import statistics
+import sys
+from pathlib import Path
+
+# O banco é um só, na raiz, e serve aos três componentes.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banco import BancoEmMemoria
 
 TOPICO_CONTAGEM = "fila/+/contagem"
 TOPICO_VALIDACAO = "fila/+/validacao"
@@ -47,6 +53,7 @@ CORES = {
 
 INTERVALO_PAINEL = 2
 
+banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
 entradas = {}
 saidas = {}
 fila_saidas = {}
@@ -69,6 +76,7 @@ def registrar(fila):
 
 def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
+    banco.inserir(msg.topic, payload)
     fila = payload["filaId"]
     registrar(fila)
 
@@ -187,6 +195,27 @@ def melhor_fila(fila, candidatas, tempo_espera):
         return fila
     return min(melhores, key=lambda c: tempo_espera[c] if tempo_espera[c] is not None else float("inf"))
 
+def espera_texto(espera):
+    if espera is None or espera == float("inf"):
+        return "espera indeterminada"
+    return f"{int(espera)}s de espera"
+
+def situacao_de(fila, ocupacao, tempo_espera):
+    return (f"{fila} está {ROTULOS[semaforo[fila]]} "
+            f"({espera_texto(tempo_espera[fila])}, {ocupacao[fila]} na fila)")
+
+def motivo_de(fila, destino, ocupacao, tempo_espera):
+    # O motivo sai junto com a recomendação para que quem observa - e quem foi
+    # desviado - saiba por que a pessoa foi mandada para outra fila, e não só
+    # para onde.
+    if semaforo[fila] == "livre":
+        return f"{situacao_de(fila, ocupacao, tempo_espera)}: sem motivo para desviar"
+    if destino == fila:
+        return (f"{situacao_de(fila, ocupacao, tempo_espera)}, "
+                f"mas nenhuma outra fila está em estado melhor")
+    return (f"{situacao_de(fila, ocupacao, tempo_espera)}; "
+            f"{situacao_de(destino, ocupacao, tempo_espera)}")
+
 def recomendar_fila(client):
     agora = datetime.now()
 
@@ -214,9 +243,10 @@ def recomendar_fila(client):
         else:
             destino = melhor_fila(fila, atualizadas, tempo_espera)
 
-        publicar(client, fila, ocupacao[fila], destino, tempo_espera[fila])
+        motivo = motivo_de(fila, destino, ocupacao, tempo_espera)
+        publicar(client, fila, ocupacao[fila], destino, tempo_espera[fila], motivo)
 
-def publicar(client, fila, ocupacao, destino, espera):
+def publicar(client, fila, ocupacao, destino, espera, motivo):
     estado = (semaforo[fila], destino)
     if ultima_publicacao[fila] == estado:
         return
@@ -227,6 +257,7 @@ def publicar(client, fila, ocupacao, destino, espera):
         "semaforo": semaforo[fila],
         "ocupacao": ocupacao,
         "sentidoRecomendado": destino,
+        "motivo": motivo,
         "tempoEsperaEstimado": (
             int(espera) if espera is not None and espera != float("inf") else None
         ),
@@ -234,13 +265,12 @@ def publicar(client, fila, ocupacao, destino, espera):
     client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(payload))
     ultima_publicacao[fila] = estado
 
-    if anterior is not None and anterior[0] != semaforo[fila]:
-        if espera is None or espera == float("inf"):
-            estimada = "espera indeterminada"
+    if anterior is not None and anterior != estado:
+        if anterior[0] != semaforo[fila]:
+            cabecalho = f"{fila}: {ROTULOS[anterior[0]]} -> {ROTULOS[semaforo[fila]]}"
         else:
-            estimada = f"{int(espera)}s de espera"
-        print(f"\n>>> {fila}: {ROTULOS[anterior[0]]} -> {ROTULOS[semaforo[fila]]}"
-              f"  ({estimada}, {ocupacao} na fila)\n")
+            cabecalho = f"{fila}: {ROTULOS[semaforo[fila]]}, destino {anterior[1]} -> {destino}"
+        print(f"\n>>> {cabecalho}\n    motivo: {motivo}\n")
 
     if anterior is None:
         print(f"{CORES[semaforo[fila]]}  {fila} entrou em operação")

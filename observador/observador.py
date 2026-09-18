@@ -1,13 +1,21 @@
 import paho.mqtt.client as mqtt
 import json
 from datetime import datetime, timedelta
+import sys
+from pathlib import Path
+
+# O banco é um só, na raiz, e serve aos três componentes.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from banco import BancoEmMemoria
 
 TOPICO_TODAS_FILAS = "fila/#"
 
+banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
 ultimo_heartbeat = {}
 
 def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
+    banco.inserir(msg.topic, payload)
     fila = payload["filaId"]
 
     tipo_evento = payload.get("tipo", msg.topic.rsplit("/", 1)[-1])
@@ -19,6 +27,9 @@ def on_message(client, userdata, msg):
         print(f"[{timestamp}] {fila}: {tipo_evento} seq={sequence} (latência {latencia:.0f}ms)")
     else:
         print(f"[{datetime.now()}] {fila}: {tipo_evento} seq={sequence} (sem carimbo de origem)")
+
+    if "motivo" in payload:
+        print(f"    {payload['semaforo']} -> {payload['sentidoRecomendado']}: {payload['motivo']}")
 
     if tipo_evento == "heartbeat":
         ultimo_heartbeat[fila] = datetime.now()
