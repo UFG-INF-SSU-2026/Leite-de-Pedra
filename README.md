@@ -21,29 +21,50 @@ A fronteira integrada é produtor ↔ consumidor, mediada pelo broker MQTT.
 ocupação = pessoas contadas pelo infravermelho − pessoas aprovadas no validador
 ```
 
-Entradas e saídas são **contadores acumulados**. A janela deslizante de 20
-eventos serve apenas para a vazão — quantas pessoas por segundo aquela fila
-está consumindo agora.
+Entradas e saídas são **contadores acumulados** — a ocupação nunca é o tamanho
+de uma janela. A janela (as últimas 20 passagens, e só as dos últimos 90 s)
+serve apenas para a vazão.
+
+A vazão **não** é "passagens ÷ duração da janela". Cada passagem registra
+quantas pessoas ficaram na fila, e só entram na média os intervalos em que
+havia alguém esperando:
 
 ```
-vazão        = aprovados na janela ÷ duração da janela
+vazão        = 1 ÷ (média dos intervalos entre passagens com a fila não vazia)
 tempo espera = ocupação ÷ vazão
 ```
 
+Sem esse filtro o tempo de fila vazia entrava na média como se fosse
+atendimento lento, e 4 pessoas chegaram a aparecer como 69 s de espera.
 ## Semáforo
+
+Os limiares são de **tempo de espera estimado**, não de quantidade de pessoas.
+Dez pessoas não significam nada sozinhas: dependem de quanto o validador leva
+por pessoa. Em tempo de espera o semáforo diz algo que quem chega entende, e se
+um validador ficar lento a fila fecha com menos gente, sozinha.
 
 | Estado | Condição | Significado |
 |---|---|---|
-| verde | ocupação ≤ 5 | fila livre, permaneça |
-| amarelo | 6 a 10 | enchendo |
-| vermelho | acima de 10 | bloqueada, procure outra fila |
+| verde | espera ≤ 15 s | fila livre, permaneça |
+| amarelo | 15 s a 30 s | enchendo |
+| vermelho | acima de 30 s | bloqueada, procure outra fila |
 
-Os limites ficam em `LIMITE_ATENCAO` e `LIMITE_BLOQUEIO`, no topo do
-`consumidor.py`.
+Com 7 s por pessoa, vermelho dá por volta de 4 a 5 pessoas na fila.
 
-Para **descer** de estado a ocupação precisa cair `MARGEM_HISTERESE` abaixo do
-limite. Sem isso o semáforo piscaria entre dois estados com a ocupação
-oscilando de um em um.
+Os limites ficam em `LIMITE_ATENCAO`, `LIMITE_BLOQUEIO` e `MARGEM_HISTERESE`,
+no topo do `consumidor.py`.
+
+Para **descer** de estado a espera precisa cair `MARGEM_HISTERESE` (7 s) abaixo
+do limite: sai de vermelho com 23 s e de amarelo com 8 s. Sem isso o semáforo
+piscaria entre dois estados com a espera oscilando de um segundo.
+
+Dois casos sem número para classificar:
+
+- **fila com gente e nenhuma passagem recente.** Se ela já atendeu alguém e
+  parou, o validador travou: o painel mostra `parada` e a fila fecha. Se nunca
+  atendeu ninguém, é fila recém-aberta — não há o que concluir, e fechá-la aí
+  bloquearia a fila na chegada da primeira pessoa.
+- **vazão ainda não medida.** O estado atual é mantido em vez de inventar um.
 
 ## Quando o sistema desvia pessoas
 
@@ -66,6 +87,11 @@ Telemetria — `fila/{id}/contagem`, `fila/{id}/validacao`, `fila/{id}/heartbeat
 
 `validacao` acrescenta `"resultado": "aprovado" | "reprovado"`.
 A identidade de um evento é o par `(tipo, sequence)`.
+
+O `heartbeat` sai a cada 2 s e **não entra na contabilidade** — ele só prova
+que o enlace está vivo. O consumidor assina os três tópicos; sem o heartbeat
+ele se declararia `sem dados` em qualquer período calmo, com o enlace
+perfeito, e o painel piscaria entre as chegadas.
 
 Recomendação — `fila/{id}/recomendacao`, publicada pelo consumidor:
 
@@ -124,12 +150,27 @@ em blocos e a demonstração perde o tempo real.
 
 ## O que acontece sozinho
 
-O consumidor imprime um painel a cada 2 s com as duas filas lado a lado —
-estado, ocupação, vazão, espera estimada e para onde mandar quem chega. As
-mudanças de estado saem destacadas entre os painéis.
+O consumidor imprime um painel a cada 2 s, uma linha por fila — estado, espera
+estimada, ocupação, vazão e para onde mandar quem chega:
+
+```
+  fila-a  ● VERMELHO  espera  ~34s    5 na fila   0.14/s   --> fila-b
+  fila-b  ● VERDE     espera   ~7s    1 na fila   0.15/s   permanecer
+```
+
+As mudanças de estado saem destacadas entre os painéis:
+
+```
+>>> fila-a: VERDE -> AMARELO  (17s de espera, 3 na fila)
+```
+
+A recomendação só é publicada **quando o par (estado, destino) muda** — não a
+cada evento. É por isso que o terminal do observador fica quieto entre as
+transições mesmo com telemetria chegando o tempo todo.
 
 O produtor dispara **picos periódicos, alternando de fila**: o primeiro aos
-12 s na fila-a, e daí em diante a cada 40 s, trocando de fila a cada vez
+10 s na fila-a, com 8 s de duração, e daí em diante a cada 80 s, trocando de
+fila a cada vez
 (`PICO_ATRASO`, `PICO_DURACAO`, `CICLO_PICO`, `INTERVALO_PICO`). Num evento real
 os picos se repetem e não se concentram sempre na mesma entrada; repetir também
 garante que a demonstração sempre tenha um ciclo à vista, sem depender de quem
@@ -138,8 +179,9 @@ apresenta subir o produtor no instante certo.
 Cada ciclo, sem intervenção:
 
 1. as duas filas começam verdes e ninguém é desviado
-2. a fila em pico passa de 5 e fica amarela; começa a apontar para a outra
-3. passa de 10 e fica vermelha
+2. a fila em pico passa de 15 s de espera e fica amarela; começa a apontar
+   para a outra
+3. passa de 30 s e fica vermelha
 4. a outra fila absorve os desvios e também enche
 5. a fila em pico drena, volta a amarelo e depois a verde
 6. as duas terminam verdes, até o próximo pico

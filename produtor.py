@@ -34,9 +34,16 @@ filas = [f"fila-{chr(ord('a') + i)}" for i in range(quantidade)]
 # Regime normal: cada fila recebe menos gente do que o seu validador consegue
 # atender, então todas ficam verdes e ninguém é desviado. Cada validador atende
 # só a sua fila, então acrescentar filas acrescenta capacidade na mesma medida.
-INTERVALO_CHEGADA_BASE = 1.5
-INTERVALO_ATENDIMENTO_BASE = 0.8
+# Tempo médio que uma pessoa leva para passar pelo validador facial: se
+# posicionar, ser capturada, o rosto casar, a catraca liberar e ela atravessar.
+TEMPO_MEDIO_PASSAGEM = 7.0
 TAXA_REPROVACAO = 0.15
+
+# O validador tenta a cada tantos segundos; como parte das tentativas é
+# reprovada e não tira ninguém da fila, o intervalo entre tentativas é menor
+# que o tempo médio de passagem.
+INTERVALO_ATENDIMENTO_BASE = TEMPO_MEDIO_PASSAGEM * (1 - TAXA_REPROVACAO)
+INTERVALO_CHEGADA_BASE = 18.0
 
 # Preferência natural do público pelas primeiras entradas: quanto mais adiante a
 # fila, menos gente procura por ela espontaneamente.
@@ -48,13 +55,14 @@ INTERVALO_ATENDIMENTO = {fila: INTERVALO_ATENDIMENTO_BASE for fila in filas}
 # Picos de entrada periódicos, alternando de fila. Num evento real os picos se
 # repetem e não se concentram sempre na mesma entrada; repetir também garante
 # que a demonstração sempre tenha um ciclo à vista.
-PICO_ATRASO = 12      # primeiro pico, em segundos após a partida
-PICO_DURACAO = 10     # quanto tempo o pico dura
-CICLO_PICO = 40       # de quanto em quanto tempo ele volta
-INTERVALO_PICO = 0.25
+PICO_ATRASO = 10      # primeiro pico, em segundos após a partida
+PICO_DURACAO = 8      # quanto tempo o pico dura
+CICLO_PICO = 80       # de quanto em quanto tempo ele volta
+INTERVALO_PICO = 0.66
 
 partida = time.monotonic()
 pico_anterior = {"fila": None}
+trava_pico = threading.Lock()
 
 def fila_em_pico():
     decorrido = time.monotonic() - partida
@@ -68,18 +76,10 @@ def fila_em_pico():
 def intervalo_de_chegada(fila):
     return INTERVALO_PICO if fila_em_pico() == fila else INTERVALO_CHEGADA[fila]
 
-def anunciar_pico():
-    atual = fila_em_pico()
-    if atual != pico_anterior["fila"]:
-        anterior = pico_anterior["fila"]
-        pico_anterior["fila"] = atual
-        if atual:
-            print(f"\n>>> PICO DE ENTRADA na {atual} <<<\n")
-        else:
-            print(f"\n>>> fim do pico na {anterior} - chegadas voltam ao normal <<<\n")
-
+# Estado do mundo físico simulado e da comunicação.
 na_fila = {fila: 0 for fila in filas}
 destino_atual = {fila: fila for fila in filas}
+
 contador = {
     "contagem": itertools.count(1),
     "validacao": itertools.count(1),
@@ -96,6 +96,19 @@ def topico_de(fila, tipo):
     if tipo == "validacao":
         return TOPICO_VALIDACAO.format(fila)
     return TOPICO_HEARTBEAT.format(fila)
+
+def anunciar_pico():
+    atual = fila_em_pico()
+    with trava_pico:
+        if atual == pico_anterior["fila"]:
+            return
+        anterior = pico_anterior["fila"]
+        pico_anterior["fila"] = atual
+
+    if atual:
+        print(f"\n>>> PICO DE ENTRADA na {atual} <<<\n")
+    else:
+        print(f"\n>>> fim do pico na {anterior} - chegadas voltam ao normal <<<\n")
 
 def publicar_evento(client, fila, tipo, extra=None):
     payload = {
@@ -127,9 +140,27 @@ def esvaziar_fila_local(client):
         print(f"Reenviado da fila local: {topico} = {payload}")
 
 def simular_chegadas(client, fila):
+    # O intervalo entre chegadas não pode ser decidido antes de um sono longo:
+    # no regime normal ele é de dezenas de segundos, e um pico de 8s começaria
+    # e terminaria com esta thread dormindo - ela nunca veria o ritmo mudar.
+    # Por isso o laço acorda com frequência, confere o relógio, e refaz o
+    # próximo horário assim que o pico começa ou acaba.
+    em_pico_antes = fila_em_pico() == fila
+    proximo = time.monotonic() + intervalo_de_chegada(fila)
+
     while True:
-        time.sleep(intervalo_de_chegada(fila))
+        time.sleep(0.05)
         anunciar_pico()
+        agora = time.monotonic()
+
+        em_pico_agora = fila_em_pico() == fila
+        if em_pico_agora != em_pico_antes:
+            em_pico_antes = em_pico_agora
+            proximo = agora + intervalo_de_chegada(fila)
+
+        if agora < proximo:
+            continue
+        proximo = agora + intervalo_de_chegada(fila)
 
         # A pessoa chega procurando esta fila, mas obedece ao semáforo: se ele
         # não estiver verde, ela entra na fila indicada. Quem a conta é o

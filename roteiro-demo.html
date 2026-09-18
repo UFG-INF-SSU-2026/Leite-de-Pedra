@@ -212,24 +212,25 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       <h2>O sistema absorvendo um pico</h2>
     </div>
     <div class="prose">
-      <p>Nada a digitar. O consumidor imprime um painel a cada 2 s e o produtor dispara um pico a cada 40 s, <strong>alternando de fila</strong> — primeiro na fila-a, depois na fila-b, e assim por diante.</p>
-      <p>Isso importa na hora: você não precisa cronometrar nada. Se o professor chegar no meio de uma explicação, o próximo ciclo vem em no máximo 40 segundos.</p>
+      <p>Nada a digitar. O consumidor imprime um painel a cada 2 s e o produtor dispara um pico de 8 s a cada 80 s, <strong>alternando de fila</strong> — o primeiro aos 10 s na fila-a, o seguinte na fila-b, e assim por diante.</p>
+      <p>Isso importa na hora: você não precisa cronometrar nada. Cada ciclo completo (verde &rarr; vermelho &rarr; amarelo &rarr; verde) leva cerca de 60 s, e se o professor chegar no meio de uma explicação o próximo vem em no máximo 80 segundos.</p>
     </div>
 
     <div class="term">
       <div class="term-bar"><span class="dot"></span><span class="name">consumidor — o painel</span></div>
-<pre>  fila-a  <span class="g">● VERDE</span>    1 na fila   1.1/s   espera  ~0s   permanecer
-  fila-b  <span class="g">● VERDE</span>    1 na fila   1.3/s   espera  ~0s   permanecer
+<pre>  fila-a  <span class="g">● VERDE</span>     espera   ~7s    1 na fila   0.15/s   permanecer
+  fila-b  <span class="g">● VERDE</span>     espera   ~0s    0 na fila   0.14/s   permanecer
 
-<span class="y">&gt;&gt;&gt; fila-a: VERDE -&gt; AMARELO  (6 na fila)</span>
+<span class="y">&gt;&gt;&gt; fila-a: VERDE -&gt; AMARELO  (17s de espera, 3 na fila)</span>
 
-  fila-a  <span class="y">● AMARELO</span>  5 na fila   1.3/s   espera  ~3s   --&gt; fila-b
-  fila-b  <span class="g">● VERDE</span>    5 na fila   1.1/s   espera  ~4s   permanecer
+  fila-a  <span class="y">● AMARELO</span>   espera  ~17s    3 na fila   0.17/s   --&gt; fila-b
+  fila-b  <span class="g">● VERDE</span>     espera   ~7s    1 na fila   0.14/s   permanecer
 
-<span class="r">&gt;&gt;&gt; fila-a: AMARELO -&gt; VERMELHO  (11 na fila)</span>
+<span class="r">&gt;&gt;&gt; fila-a: AMARELO -&gt; VERMELHO  (53s de espera, 9 na fila)</span>
 
-  fila-a  <span class="r">● VERMELHO</span> 11 na fila   1.3/s   espera  ~8s   --&gt; fila-b
-  fila-b  <span class="y">● AMARELO</span>  5 na fila   1.2/s   espera  ~4s   permanecer</pre>
+  fila-a  <span class="r">● VERMELHO</span>  espera  ~53s    9 na fila   0.17/s   --&gt; fila-b
+  fila-b  <span class="y">● AMARELO</span>   espera  ~19s    3 na fila   0.15/s   permanecer</pre>
+      <p class="prose">A coluna do meio é o que o semáforo decide: <strong>a espera estimada</strong>, não a quantidade de pessoas. Com 7 s por pessoa no validador, amarelo dá por volta de 3 e vermelho por volta de 5.</p>
     </div>
 
     <div class="acts">
@@ -253,7 +254,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>Passou de 5, ficou amarela e a coluna da direita mudou para "--&gt; fila-b". Passou de 10, vermelha. Só a partir do amarelo o sistema começa a apontar para a outra fila.</em>
+          <em>Passou de 15 segundos de espera, ficou amarela e a última coluna mudou para "--&gt; fila-b". Passou de 30 segundos, vermelha. Só a partir do amarelo o sistema começa a apontar para a outra fila.</em>
         </div>
       </div>
 
@@ -265,8 +266,8 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         </div>
         <div class="term">
           <div class="term-bar"><span class="dot"></span><span class="name">produtor</span></div>
-<pre>   (desvio: chegou em fila-a, entrou em fila-b - 7 na fila)
-   (desvio: chegou em fila-a, entrou em fila-b - 8 na fila)</pre>
+<pre>   (desvio: chegou em fila-a, entrou em fila-b - 3 na fila)
+   (desvio: chegou em fila-a, entrou em fila-b - 4 na fila)</pre>
         </div>
         <div class="say">
           <span class="lbl">o que dizer — é o ponto alto</span>
@@ -360,12 +361,12 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
 
       <div class="q">
         <span class="ask">Como vocês medem a ocupação?</span>
-        <span class="ans">Contadores acumulados: quem o infravermelho contou na entrada menos quem o validador aprovou. A janela deslizante de 20 eventos serve só para a vazão — quantas pessoas por segundo a fila consome agora. Tempo de espera é ocupação dividida por vazão.<br><br><strong>Uma decisão:</strong> um <code>reprovado</code> não tira a pessoa da fila, ela continua lá para tentar de novo. Só <code>aprovado</code> conta como saída.</span>
+        <span class="ans">Contadores acumulados: quem o infravermelho contou na entrada menos quem o validador aprovou. A vazão vem das passagens recentes (últimas 20, e só as dos últimos 90 s), e não é passagens dividido por tempo: cada passagem registra quanta gente ficou na fila, e só entram na média os intervalos em que havia alguém esperando — senão o tempo de fila vazia entraria na conta como atendimento lento. Tempo de espera é ocupação dividida por vazão.<br><br><strong>Uma decisão:</strong> um <code>reprovado</code> não tira a pessoa da fila, ela continua lá para tentar de novo. Só <code>aprovado</code> conta como saída.</span>
       </div>
 
       <div class="q">
         <span class="ask">Por que o sistema não fica desviando o tempo todo?</span>
-        <span class="ans">Duas travas. O semáforo tem <strong>histerese</strong>: para descer de estado a ocupação precisa cair 2 abaixo do limite, senão ele piscaria com a ocupação oscilando de um em um. E o desvio compara <strong>estados</strong>, não números: só mandamos gente para uma fila que esteja num nível melhor. Se todas estão igualmente cheias, não há para onde mandar.<br><br>Chegamos nisso porque a primeira versão oscilava de verdade — 120 mudanças de estado onde agora há 14.</span>
+        <span class="ans">Duas travas. O semáforo tem <strong>histerese</strong>: para descer de estado a espera precisa cair 7 segundos abaixo do limite — sai de vermelho com 23 s e de amarelo com 8 s. Sem isso ele piscaria com a espera oscilando de um segundo. E o desvio compara <strong>estados</strong>, não números: só mandamos gente para uma fila que esteja num nível melhor. Se todas estão igualmente cheias, não há para onde mandar.<br><br>Chegamos nisso porque a primeira versão oscilava de verdade — 120 mudanças de estado em 100 s, onde no último ensaio houve 10 em 185 s.</span>
       </div>
 
       <div class="q">
@@ -388,9 +389,9 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
     </div>
     <div class="prose">
       <p>Eles pedem uma mudança ao vivo. Duas ensaiadas, ambas de uma linha, no topo do <code>consumidor.py</code>:</p>
-      <p><strong>Mudar o limite do vermelho.</strong> <code>LIMITE_BLOQUEIO = 10</code> para <code>6</code>. A fila-a fecha muito antes e o desvio começa mais cedo.</p>
+      <p><strong>Mudar o limite do vermelho.</strong> <code>LIMITE_BLOQUEIO = 30</code> para <code>15</code>. A fila fecha com metade da espera e o desvio começa muito mais cedo.</p>
       <p><strong>Mudar a validade do dado.</strong> <code>VALIDADE_DADOS</code> de 6 s para 2 s. Na queda do enlace o congelamento aparece quase junto com o Ctrl+C.</p>
-      <p><strong>Mudar o ritmo dos picos.</strong> <code>CICLO_PICO</code> no <code>produtor.py</code>, de 40 para 20. Os picos passam a vir no dobro da frequência e as filas mal têm tempo de drenar.</p>
+      <p><strong>Mudar o ritmo dos picos.</strong> <code>CICLO_PICO</code> no <code>produtor.py</code>, de 80 para 40. Os picos vêm no dobro da frequência e as filas mal têm tempo de drenar.</p>
       <p>As três mostram que vocês sabem <strong>onde mora a política</strong> — que é o que a pergunta testa.</p>
     </div>
   </section>
@@ -406,7 +407,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         <tbody>
           <tr><td class="num">Address already in use</td><td>o serviço subiu — <code>sudo systemctl stop mosquitto</code>, e confira o <code>mask</code></td></tr>
           <tr><td class="num">logs em bloco</td><td>faltou o <code>-u</code> no <code>python3</code></td></tr>
-          <tr><td class="num">semáforo não muda</td><td>o primeiro pico é aos 12 s e eles voltam a cada 40 s — espere</td></tr>
+          <tr><td class="num">semáforo não muda</td><td>o primeiro pico é aos 10 s e eles voltam a cada 80 s — espere</td></tr>
           <tr><td class="num">observador mudo</td><td>subiu antes do broker — reinicie só ele</td></tr>
           <tr><td class="num">nada volta após religar</td><td>espere, a reconexão do paho leva alguns segundos</td></tr>
           <tr><td class="num">DeprecationWarning</td><td>do paho 2.x sobre a API de callback. Inofensivo</td></tr>
