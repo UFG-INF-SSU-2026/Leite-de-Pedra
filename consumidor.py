@@ -58,18 +58,25 @@ def on_message(client, userdata, msg):
 
     if msg.topic.endswith("/contagem"):
         entradas[fila] += 1
-        atualizar_heartbeat(fila)
+        atualizar_heartbeat(fila, payload)
 
     elif msg.topic.endswith("/validacao"):
         if payload["resultado"] == "aprovado":
             saidas[fila] += 1
             fila_saidas[fila].append(payload)
-        atualizar_heartbeat(fila)
+        atualizar_heartbeat(fila, payload)
 
     recomendar_fila(client)
 
-def atualizar_heartbeat(fila):
-    ultimo_heartbeat[fila] = datetime.now()
+def atualizar_heartbeat(fila, payload):
+    # O frescor é medido pelo instante em que o evento ACONTECEU, não pelo
+    # instante em que o pacote chegou. Na volta de uma queda o produtor reenvia
+    # o que acumulou: esses eventos entram na contabilidade, porque ninguém que
+    # passou pela fila pode ser perdido, mas não fazem o consumidor se declarar
+    # atualizado. A recomendação só volta quando chegar evento recente de fato.
+    origem = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
+    if ultimo_heartbeat[fila] is None or origem > ultimo_heartbeat[fila]:
+        ultimo_heartbeat[fila] = origem
 
 def ocupacao_de(fila):
     return max(0, entradas[fila] - saidas[fila])
