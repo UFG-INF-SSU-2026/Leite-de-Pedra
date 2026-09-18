@@ -1,4 +1,4 @@
-<title>Fronteira Produtor / Consumidor</title>
+<title>Balanceamento de Filas de Entrada</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600;700&display=swap">
 <style>
   :root {
@@ -158,8 +158,8 @@
 
   <header class="top">
     <span class="eyebrow">Marco 2 · Software para Sistemas Ubíquos · 18/09</span>
-    <h1>Fronteira Produtor / Consumidor</h1>
-    <p class="lede">Roteiro de operação para a verificação. Produtor publica telemetria, consumidor devolve recomendação, observador acompanha a travessia. O que se demonstra é a fronteira — não o algoritmo de recomendação.</p>
+    <h1>Balanceamento de Filas de Entrada</h1>
+    <p class="lede">Roteiro de operação para a verificação. Infravermelho conta quem chega, validador facial conta quem entra, e um semáforo por fila distribui o pico. A fronteira integrada é produtor ↔ consumidor — o que se demonstra é a travessia, não a fórmula.</p>
   </header>
 
   <section>
@@ -174,17 +174,14 @@
       <div class="term-bar"><span class="dot"></span><span class="name">preparação — uma vez</span></div>
 <pre>sudo apt install mosquitto mosquitto-clients python3-paho-mqtt
 sudo systemctl stop mosquitto
-sudo systemctl disable mosquitto</pre>
+sudo systemctl mask mosquitto</pre>
     </div>
     <div class="warn-box">
-      <span class="lbl">Por que desabilitar o serviço</span>
-      O pacote sobe o mosquitto como serviço e ele ocupa a porta 1883. Sem desabilitar, <code>mosquitto -c mosquitto.conf</code> falha com <em>Address already in use</em> — e a demo precisa do broker em primeiro plano, para você poder matá-lo com Ctrl+C.
-    </div>
-    <div class="prose">
-      <p><strong>Checagem de 10 segundos, antes de entrar na sala:</strong></p>
+      <span class="lbl">Por que mask e não disable</span>
+      O pacote sobe o mosquitto como serviço e ele ocupa a 1883. Testando aqui, <code>disable</code> <strong>não segurou</strong> — o serviço voltou a subir sozinho e a demo quebrou com <em>Address already in use</em>. <code>mask</code> bloqueia de vez. Reverter depois: <code>sudo systemctl unmask mosquitto</code>.
     </div>
     <div class="term">
-      <div class="term-bar"><span class="dot"></span><span class="name">pré-voo</span></div>
+      <div class="term-bar"><span class="dot"></span><span class="name">pré-voo — 10 segundos antes de entrar</span></div>
 <pre>ss -ltn | grep 1883        <span class="c"># não deve retornar nada</span>
 python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></pre>
     </div>
@@ -195,9 +192,6 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       <span class="eyebrow">Montagem</span>
       <h2>Quatro terminais</h2>
     </div>
-    <div class="prose">
-      <p>Abra nesta ordem. O broker primeiro, o produtor por último — ele é quem começa a gerar tráfego.</p>
-    </div>
     <div class="term">
       <div class="term-bar"><span class="dot"></span><span class="name">cd ubicomp/marco2</span></div>
 <pre><span class="c">#1</span> mosquitto -c mosquitto.conf
@@ -206,88 +200,138 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
 <span class="c">#4</span> python3 -u produtor.py</pre>
     </div>
     <div class="prose">
-      <p>O <code>-u</code> não é detalhe: sem ele o Python segura a saída em buffer, os logs aparecem em blocos atrasados e a demonstração perde o tempo real — que é justamente o que está sendo mostrado.</p>
-      <p>Deixe o <strong>observador</strong> no maior terminal. É nele que a história acontece.</p>
+      <p>O <code>-u</code> não é detalhe: sem ele o Python segura a saída em buffer e a demonstração perde o tempo real, que é justamente o que está sendo mostrado.</p>
+      <p><strong>Consumidor no maior terminal</strong> — é onde o semáforo aparece. O observador vem logo depois; ele é quem mostra a latência.</p>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <span class="eyebrow">Roteiro · cerca de 4 minutos</span>
-      <h2>Três atos</h2>
+      <span class="eyebrow">Parte 1 · cerca de 90 segundos · roda sozinho</span>
+      <h2>O sistema absorvendo um pico</h2>
+    </div>
+    <div class="prose">
+      <p>Nada a digitar. O produtor dispara um pico de chegadas na fila-a aos 12 s, e o ciclo inteiro acontece na tela.</p>
     </div>
 
     <div class="acts">
-
       <div class="act act-1">
         <div class="act-head">
-          <span class="act-n">ATO 1</span>
+          <span class="act-n">0:00</span>
           <span class="act-t">Regime normal</span>
-          <span class="pill">enlace ok</span>
+          <span class="pill">ninguém é desviado</span>
         </div>
-        <ul class="ticks">
-          <li>Contagens a cada 1 s, heartbeats a cada 2 s, validações a cada 3 s</li>
-          <li>Latência de 0 a 3 ms no observador</li>
-          <li>Consumidor publica recomendações conforme a ocupação muda</li>
-        </ul>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">observador</span></div>
-<pre>[10:25:45.499] fila-a: contagem  seq=3  (latência <span class="g">1ms</span>)
-[10:25:46.499] fila-a: heartbeat seq=3  (latência <span class="g">2ms</span>)
-[10:25:46.500] fila-b: heartbeat seq=4  (latência <span class="g">2ms</span>)</pre>
+          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
+<pre><span class="g">● VERDE</span>  fila-a: 1 na fila - permanecer nesta fila
+<span class="g">● VERDE</span>  fila-b: 1 na fila - permanecer nesta fila</pre>
         </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>O <code>eventTimeMs</code> é carimbado no produtor e a latência é calculada no consumidor. Esse número é a fronteira sendo medida, não uma estimativa.</em>
-        </div>
-      </div>
-
-      <div class="act act-2">
-        <div class="act-head">
-          <span class="act-n">ATO 2</span>
-          <span class="act-t">Queda do enlace</span>
-          <span class="pill">Ctrl+C no broker</span>
-        </div>
-        <ul class="ticks">
-          <li>Produtor passa a acumular: <code>Sem enlace: evento acumulado na fila local (N pendentes)</code></li>
-          <li>Observador silencia</li>
-          <li>Passados 6 s — <strong>espere</strong> — consumidor: <code>sem dados atualizados - mantendo recomendação anterior</code></li>
-        </ul>
-        <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">produtor</span></div>
-<pre><span class="y">Sem enlace:</span> evento acumulado na fila local (1 pendentes)
-<span class="y">Sem enlace:</span> evento acumulado na fila local (2 pendentes)
-<span class="y">Sem enlace:</span> evento acumulado na fila local (3 pendentes)</pre>
-        </div>
-        <div class="say">
-          <span class="lbl">o que dizer — é o ponto alto</span>
-          <em>O consumidor não está recomendando com dado velho. Ele congelou e declarou o motivo. Degradar em silêncio seria o erro; ele degrada de forma observável.</em>
+          <em>Em operação normal o sistema não intervém. Cada fila recomenda a si mesma. Redirecionar sem necessidade só geraria confusão.</em>
         </div>
       </div>
 
       <div class="act act-3">
         <div class="act-head">
-          <span class="act-n">ATO 3</span>
-          <span class="act-t">Volta do enlace</span>
-          <span class="pill">religa o broker</span>
+          <span class="act-n">0:12</span>
+          <span class="act-t">O pico chega</span>
+          <span class="pill">desvio começa</span>
         </div>
-        <ul class="ticks">
-          <li>Produtor: <code>Reenviado da fila local</code> — na ordem em que foram gerados</li>
-          <li>Consumidor e observador: <code>assinaturas restabelecidas</code></li>
-          <li>Observador: latências de ~15 000 ms e o alerta de heartbeat</li>
-        </ul>
         <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">observador</span></div>
-<pre>[10:25:53.506] fila-a: contagem seq=19 (latência <span class="r">15039ms</span>)
-<span class="r">ALERTA: fila fila-a sem heartbeat há mais de 8s</span>
-[10:25:54.503] fila-a: heartbeat seq=11 (latência <span class="r">14047ms</span>)</pre>
+          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
+<pre><span class="y">● AMARELO</span>  fila-a: 6 na fila - seguir para fila-b
+<span class="r">● VERMELHO</span>  fila-a: 11 na fila - seguir para fila-b</pre>
         </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>Os 15 segundos de latência são a evidência visível de que esse evento não descreve mais o presente. Chegou, está íntegro, e mesmo assim é informação vencida.</em>
+          <em>A fila-a passou de 5 e ficou amarela; passou de 10 e ficou vermelha. Só a partir daí o sistema começa a apontar para a outra fila.</em>
         </div>
       </div>
 
+      <div class="act act-2">
+        <div class="act-head">
+          <span class="act-n">0:25</span>
+          <span class="act-t">A fila-b absorve</span>
+          <span class="pill">carga compartilhada</span>
+        </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><span class="name">produtor</span></div>
+<pre>   (desvio: chegou em fila-a, entrou em fila-b - 7 na fila)
+   (desvio: chegou em fila-a, entrou em fila-b - 8 na fila)</pre>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer — é o ponto alto</span>
+          <em>O produtor assina a recomendação. Quem chega e vê vermelho entra na outra fila. A recomendação não informa apenas — ela muda o comportamento, e é isso que fecha o ciclo.</em>
+        </div>
+      </div>
+
+      <div class="act act-1">
+        <div class="act-head">
+          <span class="act-n">0:45</span>
+          <span class="act-t">Recuperação</span>
+          <span class="pill">volta ao verde</span>
+        </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
+<pre><span class="y">● AMARELO</span>  fila-a: 8 na fila - permanecer nesta fila
+<span class="g">● VERDE</span>  fila-a: 3 na fila - permanecer nesta fila
+<span class="g">● VERDE</span>  fila-b: 3 na fila - permanecer nesta fila</pre>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>A fila-a drenou porque parou de receber gente. As duas voltam ao verde e o sistema sai de cena. O pico foi absorvido, não eliminado — balanceamento distribui carga, não cria capacidade.</em>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Parte 2 · cerca de 2 minutos</span>
+      <h2>Queda do enlace</h2>
+    </div>
+    <div class="prose">
+      <p>Aqui é a fronteira sendo testada. <strong>Ctrl+C no terminal do broker.</strong></p>
+    </div>
+
+    <div class="acts">
+      <div class="act act-2">
+        <div class="act-head">
+          <span class="act-n">QUEDA</span>
+          <span class="act-t">O consumidor congela</span>
+          <span class="pill">espere 6 segundos</span>
+        </div>
+        <ul class="ticks">
+          <li>Produtor: <code>Sem enlace: evento acumulado na fila local (N pendentes)</code></li>
+          <li>Observador silencia</li>
+          <li>Aos 6 s — <strong>espere</strong> — <code>sem dados atualizados - mantendo recomendação anterior</code></li>
+        </ul>
+        <div class="say">
+          <span class="lbl">o que dizer — é o ponto alto da Parte 2</span>
+          <em>O semáforo tem um estado anterior na memória, e seria fácil continuar exibindo. Mas sem dados novos ele não descreve mais a fila. O consumidor congela e declara o motivo, em vez de sinalizar verde para uma fila que pode estar lotada.</em>
+        </div>
+      </div>
+
+      <div class="act act-3">
+        <div class="act-head">
+          <span class="act-n">VOLTA</span>
+          <span class="act-t">Religa o broker</span>
+          <span class="pill">latência alta</span>
+        </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><span class="name">observador</span></div>
+<pre>[11:58:21.402] fila-a: contagem seq=64 (latência <span class="r">14449ms</span>)
+<span class="r">ALERTA: fila fila-a sem heartbeat há mais de 8s</span></pre>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>Os 14 segundos de latência são a evidência visível: o evento chegou íntegro e ainda assim é informação vencida. Ele descreve uma fila que já mudou.</em>
+        </div>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Medido no último ensaio: <strong>106 eventos acumulados</strong> na fila local, <strong>85 reenviados</strong> em ordem na volta, latência máxima de <strong>14 449 ms</strong>, 2 alertas de heartbeat, nenhum crash.</p>
     </div>
   </section>
 
@@ -300,27 +344,32 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
 
       <div class="q">
         <span class="ask">Expliquem o contrato.</span>
-        <span class="ans">Telemetria carrega <code>filaId</code>, <code>tipo</code>, <code>sequence</code> e <code>eventTimeMs</code>; validação acrescenta <code>resultado</code>. A identidade de um evento é o par <code>(tipo, sequence)</code>. O <code>eventTimeMs</code> é o que permite medir latência e detectar dado vencido — sem ele não existiria a decisão do Ato 2.<br><br><strong>Se perguntarem de versionamento:</strong> ainda não versionamos. O próximo passo seria um <code>schemaVersion</code> no payload; hoje uma mudança de campo quebraria os dois lados.</span>
+        <span class="ans">Telemetria carrega <code>filaId</code>, <code>tipo</code>, <code>sequence</code> e <code>eventTimeMs</code>; validação acrescenta <code>resultado</code>. A identidade é o par <code>(tipo, sequence)</code>. A recomendação devolve <code>semaforo</code>, <code>ocupacao</code>, <code>sentidoRecomendado</code> e <code>tempoEsperaEstimado</code>.<br><br><strong>Sobre versionamento:</strong> ainda não versionamos. O próximo passo seria um <code>schemaVersion</code>; hoje uma mudança de campo quebraria os dois lados.</span>
       </div>
 
       <div class="q">
         <span class="ask">Por que MQTT e não HTTP?</span>
-        <span class="ans">Porque o requisito é múltiplos consumidores. A prova está na tela: o <strong>observador é um terceiro assinante que foi acrescentado sem tocar uma linha do produtor nem do consumidor</strong>. Com HTTP, o produtor precisaria conhecer o endereço de cada consumidor — acoplamento de espaço. O broker remove isso.</span>
+        <span class="ans">Múltiplos consumidores. A prova está na tela: o <strong>observador é um terceiro assinante acrescentado sem tocar uma linha do produtor nem do consumidor</strong>. Além disso o fluxo é bidirecional — o produtor assina a recomendação que o consumidor publica. Com HTTP cada lado precisaria conhecer o endereço do outro.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Como vocês medem a ocupação?</span>
+        <span class="ans">Contadores acumulados: quem o infravermelho contou na entrada menos quem o validador aprovou. A janela deslizante de 20 eventos serve só para a vazão — quantas pessoas por segundo a fila consome agora. Tempo de espera é ocupação dividida por vazão.<br><br><strong>Uma decisão:</strong> um <code>reprovado</code> não tira a pessoa da fila, ela continua lá para tentar de novo. Só <code>aprovado</code> conta como saída.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Por que o sistema não fica desviando o tempo todo?</span>
+        <span class="ans">Duas travas. O semáforo tem <strong>histerese</strong>: para descer de estado a ocupação precisa cair 2 abaixo do limite, senão ele piscaria com a ocupação oscilando de um em um. E o desvio compara <strong>estados</strong>, não números: só mandamos gente para uma fila que esteja num nível melhor. Se todas estão igualmente cheias, não há para onde mandar.<br><br>Chegamos nisso porque a primeira versão oscilava de verdade — 120 mudanças de estado onde agora há 14.</span>
       </div>
 
       <div class="q">
         <span class="ask">Qual QoS usaram?</span>
-        <span class="ans">QoS 0. É telemetria: perda ocasional é tolerável e o custo importa. A recuperação da queda não vem do QoS — vem da fila local no produtor, que é política da aplicação. QoS trata entrega no enlace MQTT, não garante que a regra de negócio foi executada.</span>
+        <span class="ans">QoS 0. É telemetria: perda ocasional é tolerável e o custo importa. A recuperação da queda não vem do QoS — vem da fila local no produtor, que é política da aplicação. QoS trata entrega no enlace, não garante que a regra foi executada.</span>
       </div>
 
       <div class="q">
-        <span class="ask">Onde mora o estado, e de quem é a responsabilidade?</span>
-        <span class="ans"><strong>Produtor:</strong> fila local de até 200 eventos e os contadores de sequência.<br><strong>Consumidor:</strong> janelas de 20 eventos por fila, último heartbeat, última recomendação. A política de validade — 6 segundos — está em <code>consumidor.py</code>, linha 44.<br><strong>Observador:</strong> seu próprio registro de heartbeat, com limiar de 8 s. Ele não decide nada; só torna visível.</span>
-      </div>
-
-      <div class="q">
-        <span class="ask">Qual o risco que vocês trataram?</span>
-        <span class="ans">Decidir com informação que já perdeu validade. O enlace cai, os dados param, mas as últimas leituras continuam na memória — e uma implementação ingênua seguiria recomendando com base nelas. O comportamento escolhido é congelar e declarar, não improvisar.</span>
+        <span class="ask">Onde mora o estado?</span>
+        <span class="ans"><strong>Produtor:</strong> quantas pessoas há em cada fila, fila local de até 200 eventos, contadores de sequência.<br><strong>Consumidor:</strong> entradas e saídas acumuladas, janela de vazão, estado do semáforo, último heartbeat. A política de validade — 6 segundos — está em <code>consumidor.py</code>, na constante <code>VALIDADE_DADOS</code>.<br><strong>Observador:</strong> seu próprio registro de heartbeat, limiar de 8 s. Não decide nada.</span>
       </div>
 
     </div>
@@ -332,45 +381,10 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       <h2>A pequena alteração</h2>
     </div>
     <div class="prose">
-      <p>Eles pedem uma mudança ao vivo. Chegue com esta ensaiada — uma linha, efeito imediato na tela.</p>
-      <p>Em <code>consumidor.py</code>, linha 44, troque <code>timedelta(seconds=6)</code> por <code>timedelta(seconds=2)</code>. Reinicie só o consumidor. Agora a degradação aparece quase junto com o Ctrl+C, em vez de 6 s depois.</p>
-      <p>Isso mostra que vocês sabem <strong>onde mora a política</strong> — que é exatamente o que a pergunta está testando.</p>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="eyebrow">Se quiserem perguntar do processo</span>
-      <h2>Cinco bugs que a execução revelou</h2>
-    </div>
-    <div class="prose">
-      <p>Vale ter isso na ponta da língua: nenhum deles aparecia lendo o código, só rodando.</p>
-    </div>
-    <div class="tw">
-      <table>
-        <thead><tr><th>Onde</th><th>O que acontecia</th></tr></thead>
-        <tbody>
-          <tr><td class="num">consumidor</td><td><code>TypeError</code> ao subtrair <code>int</code> de <code>datetime</code> na primeira validação</td></tr>
-          <tr><td class="num">produtor</td><td>a simulação de validações nunca rodava — laço infinito antes dela</td></tr>
-          <tr><td class="num">consumidor</td><td><code>ZeroDivisionError</code> quando o evento chegava no mesmo milissegundo</td></tr>
-          <tr><td class="num">observador</td><td>morria com <code>KeyError</code> na primeira recomendação publicada</td></tr>
-          <tr><td class="num">ambos</td><td><strong>assinavam uma vez só</strong> — reconectavam depois da queda e ficavam surdos</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="prose">
-      <p>O último é o mais interessante para comentar: numa sessão limpa o broker descarta as assinaturas quando a conexão cai. Assinar apenas na partida faz o cliente reconectar sem receber nada. A correção foi assinar dentro do <code>on_connect</code>, que roda a cada reconexão.</p>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <span class="eyebrow">Ainda em aberto</span>
-      <h2>Decidam antes de entrar</h2>
-    </div>
-    <div class="warn-box">
-      <span class="lbl">Pergunta provável</span>
-      Os eventos que voltam da fila local têm 15 s de idade e hoje o consumidor <strong>os aplica normalmente</strong>. Descartar o que passou da validade ou aplicar mesmo assim? A demo funciona dos dois jeitos — mas a resposta precisa ser uma decisão do grupo, com motivo. Se aplicam, por quê: histórico? auditoria? Se descartam, o congelamento do Ato 2 passa a ser coerente de ponta a ponta.
+      <p>Eles pedem uma mudança ao vivo. Duas ensaiadas, ambas de uma linha, no topo do <code>consumidor.py</code>:</p>
+      <p><strong>Mudar o limite do vermelho.</strong> <code>LIMITE_BLOQUEIO = 10</code> para <code>6</code>. A fila-a fecha muito antes e o desvio começa mais cedo.</p>
+      <p><strong>Mudar a validade do dado.</strong> <code>VALIDADE_DADOS</code> de 6 s para 2 s. Na queda do enlace o congelamento aparece quase junto com o Ctrl+C.</p>
+      <p>As duas mostram que vocês sabem <strong>onde mora a política</strong> — que é o que a pergunta testa.</p>
     </div>
   </section>
 
@@ -383,11 +397,12 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       <table>
         <thead><tr><th>Sintoma</th><th>Causa e conserto</th></tr></thead>
         <tbody>
-          <tr><td class="num">Address already in use</td><td>o serviço subiu de novo — <code>sudo systemctl stop mosquitto</code></td></tr>
+          <tr><td class="num">Address already in use</td><td>o serviço subiu — <code>sudo systemctl stop mosquitto</code>, e confira o <code>mask</code></td></tr>
           <tr><td class="num">logs em bloco</td><td>faltou o <code>-u</code> no <code>python3</code></td></tr>
+          <tr><td class="num">semáforo não muda</td><td>o pico é aos 12 s e dura 8 s — espere; ou reinicie o produtor</td></tr>
           <tr><td class="num">observador mudo</td><td>subiu antes do broker — reinicie só ele</td></tr>
-          <tr><td class="num">nada volta após religar</td><td>espere: a reconexão do paho leva alguns segundos</td></tr>
-          <tr><td class="num">DeprecationWarning</td><td>é do paho 2.x sobre a API de callback. Inofensivo, pode ignorar</td></tr>
+          <tr><td class="num">nada volta após religar</td><td>espere, a reconexão do paho leva alguns segundos</td></tr>
+          <tr><td class="num">DeprecationWarning</td><td>do paho 2.x sobre a API de callback. Inofensivo</td></tr>
         </tbody>
       </table>
     </div>

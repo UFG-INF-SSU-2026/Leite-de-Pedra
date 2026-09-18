@@ -1,13 +1,64 @@
-# Marco 2 — cooperação observável entre produtor e consumidor
+# Marco 2 — balanceamento de filas de entrada
 
-Fronteira integrada: o **produtor** publica eventos de contagem, validação e
-heartbeat; o **consumidor** deriva ocupação e tempo de espera e publica de volta
-uma **recomendação**; o **observador** é um terceiro assinante que acompanha a
-travessia sem que produtor e consumidor saibam da sua existência.
+Em um evento com várias filas de entrada, o público tende a se concentrar numa
+delas. O sistema conta quem entra e quem sai de cada fila, estima quanto tempo
+cada uma está levando e sinaliza num semáforo qual fila procurar — para que um
+pico de chegada se distribua em vez de empilhar numa fila só.
+
+## Componentes
+
+| Componente | Papel |
+|---|---|
+| `produtor.py` | Simula o mundo físico: infravermelho na entrada de cada fila conta quem chega; validador facial no fim conta quem entra no evento. Obedece ao semáforo. |
+| `consumidor.py` | Deriva ocupação, vazão e tempo de espera. Classifica o semáforo e publica a recomendação. |
+| `observador.py` | Terceiro assinante. Acompanha a travessia e alerta se o enlace cair. |
+
+A fronteira integrada é produtor ↔ consumidor, mediada pelo broker MQTT.
+
+## Como a ocupação é medida
+
+```
+ocupação = pessoas contadas pelo infravermelho − pessoas aprovadas no validador
+```
+
+Entradas e saídas são **contadores acumulados**. A janela deslizante de 20
+eventos serve apenas para a vazão — quantas pessoas por segundo aquela fila
+está consumindo agora.
+
+```
+vazão        = aprovados na janela ÷ duração da janela
+tempo espera = ocupação ÷ vazão
+```
+
+## Semáforo
+
+| Estado | Condição | Significado |
+|---|---|---|
+| verde | ocupação ≤ 5 | fila livre, permaneça |
+| amarelo | 6 a 10 | enchendo |
+| vermelho | acima de 10 | bloqueada, procure outra fila |
+
+Os limites ficam em `LIMITE_ATENCAO` e `LIMITE_BLOQUEIO`, no topo do
+`consumidor.py`.
+
+Para **descer** de estado a ocupação precisa cair `MARGEM_HISTERESE` abaixo do
+limite. Sem isso o semáforo piscaria entre dois estados com a ocupação
+oscilando de um em um.
+
+## Quando o sistema desvia pessoas
+
+Em regime normal **todas as filas recomendam a si mesmas** — ninguém é desviado.
+O desvio só entra quando uma fila sai do verde, e mesmo assim só aponta para
+uma fila que esteja **num estado melhor**. Se todas estiverem igualmente cheias,
+não há para onde mandar e cada fila continua recomendando a si mesma.
+
+Isso evita o efeito pingue-pongue: comparar números de ocupação diretamente faz
+a recomendação alternar a cada evento e as pessoas seriam mandadas de um lado
+para o outro sem ganho nenhum.
 
 ## Contrato
 
-Eventos de telemetria (`fila/{id}/contagem`, `fila/{id}/validacao`, `fila/{id}/heartbeat`):
+Telemetria — `fila/{id}/contagem`, `fila/{id}/validacao`, `fila/{id}/heartbeat`:
 
 ```json
 {"filaId": "fila-a", "tipo": "contagem", "sequence": 41, "eventTimeMs": 1758200000000}
@@ -16,24 +67,29 @@ Eventos de telemetria (`fila/{id}/contagem`, `fila/{id}/validacao`, `fila/{id}/h
 `validacao` acrescenta `"resultado": "aprovado" | "reprovado"`.
 A identidade de um evento é o par `(tipo, sequence)`.
 
-Recomendação (`fila/{id}/recomendacao`), publicada pelo consumidor:
+Recomendação — `fila/{id}/recomendacao`, publicada pelo consumidor:
 
 ```json
-{"filaId": "fila-a", "sentidoRecomendado": "fila-b", "tempoEsperaEstimado": 120}
+{"filaId": "fila-a", "semaforo": "bloqueada", "ocupacao": 12,
+ "sentidoRecomendado": "fila-b", "tempoEsperaEstimado": 180}
 ```
+
+O produtor assina esse tópico: quem chega e vê o semáforo fechado entra na fila
+indicada. É o que fecha o ciclo — a recomendação muda o comportamento, e não
+apenas informa.
 
 ## Preparação (uma vez)
 
 ```
 sudo apt install mosquitto mosquitto-clients python3-paho-mqtt
 sudo systemctl stop mosquitto
-sudo systemctl disable mosquitto
+sudo systemctl mask mosquitto
 ```
 
-As duas últimas linhas são necessárias: o pacote sobe o mosquitto como serviço e
-ele ocupa a porta 1883, o que faz `mosquitto -c mosquitto.conf` falhar com
-"Address already in use". A demonstração precisa do broker em primeiro plano,
-sob controle de quem apresenta.
+O pacote sobe o mosquitto como serviço e ele ocupa a porta 1883, o que faz
+`mosquitto -c mosquitto.conf` falhar com "Address already in use". `disable`
+não basta — ele só impede o autostart no boot, e o serviço volta a subir.
+`mask` bloqueia de vez. Para reverter: `sudo systemctl unmask mosquitto`.
 
 ## Executar
 
@@ -49,30 +105,29 @@ python3 -u produtor.py          # terminal 4
 O `-u` evita que o Python segure a saída em buffer — sem ele os logs aparecem
 em blocos e a demonstração perde o tempo real.
 
-## Roteiro da demonstração
+## O que acontece sozinho
 
-**1. Regime normal.** O observador mostra latência de 1 a 3 ms. Contagens a cada
-1s, heartbeats a cada 2s, validações a cada 3s. O consumidor publica recomendações
-conforme a ocupação muda.
+O produtor dispara um pico de chegadas na fila-a aos 12 s, durando 8 s
+(`PICO_INICIO`, `PICO_FIM`, `INTERVALO_PICO`). A partir daí, sem intervenção:
 
-**2. Queda do enlace.** `Ctrl+C` no terminal do broker. Observe:
+1. as duas filas começam verdes e ninguém é desviado
+2. a fila-a passa de 5 e fica amarela; começa a apontar para a fila-b
+3. passa de 10 e fica vermelha
+4. a fila-b absorve os desvios e também enche
+5. a fila-a drena, volta a amarelo e depois a verde
+6. as duas terminam verdes
 
-- o produtor passa a registrar `Sem enlace: evento acumulado na fila local (N pendentes)`
+## Queda do enlace
+
+`Ctrl+C` no terminal do broker.
+
+- o produtor acumula em fila local de até 200 eventos
 - o observador silencia
-- passados 6 s, o consumidor imprime `sem dados atualizados - mantendo recomendação anterior`
+- passados 6 s, o consumidor congela: `sem dados atualizados - mantendo recomendação anterior`
 
-O ponto a destacar: o consumidor **não** decide com informação vencida. Ele
-congela e declara o motivo.
-
-**3. Volta do enlace.** Reinicie `mosquitto -c mosquitto.conf`. Observe:
-
-- produtor: `Reenviado da fila local:` — os eventos saem na ordem em que foram gerados
-- consumidor e observador: `assinaturas restabelecidas`
-- observador: latências de ~15000 ms nos eventos atrasados, e
-  `ALERTA: fila X sem heartbeat há mais de 8s`
-
-A latência alta é a evidência visível de que aquele evento não descreve mais o
-presente.
+Ao religar, o produtor esvazia a fila local em ordem, consumidor e observador
+restabelecem as assinaturas, e o observador mostra latências de ~15 000 ms nos
+eventos atrasados.
 
 ## Notas de implementação
 
@@ -80,5 +135,5 @@ As assinaturas são feitas dentro do callback `on_connect`, não uma única vez
 antes do laço. Numa sessão limpa o broker descarta as assinaturas quando a
 conexão cai; assinar apenas na partida faz o cliente reconectar e ficar surdo.
 
-A fila local do produtor tem limite de 200 eventos (`deque(maxlen=200)`). Numa
-queda longa os eventos mais antigos são descartados em favor dos mais recentes.
+Uma validação `reprovado` não remove a pessoa da fila — ela continua lá para
+tentar de novo. Só `aprovado` conta como saída.
