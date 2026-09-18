@@ -330,6 +330,10 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
           <span class="lbl">o que dizer</span>
           <em>Os 14 segundos de latência são a evidência visível: o evento chegou íntegro e ainda assim é informação vencida. Ele descreve uma fila que já mudou.</em>
         </div>
+        <div class="warn-box">
+          <span class="lbl">não se assuste — é o comportamento certo</span>
+          O painel <strong>continua apagado durante todo o reenvio</strong>, mesmo com eventos chegando. A validade é medida pelo <code>eventTimeMs</code>, não pela hora em que o pacote chegou: os eventos atrasados entram na contagem, mas não valem como prova de que há dado atual. O painel só acende quando chega evento recente de verdade — e aí já com a ocupação acumulada correta. Vale narrar isso, porque parece travamento e é o oposto.
+        </div>
       </div>
     </div>
     <div class="prose">

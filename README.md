@@ -152,9 +152,16 @@ Cada ciclo, sem intervenção:
 - o observador silencia
 - passados 6 s, o consumidor congela: `sem dados atualizados - mantendo recomendação anterior`
 
-Ao religar, o produtor esvazia a fila local em ordem, consumidor e observador
-restabelecem as assinaturas, e o observador mostra latências de ~15 000 ms nos
-eventos atrasados.
+Ao religar, o produtor esvazia a fila local em ordem e o observador mostra
+latências de ~15 000 ms nos eventos atrasados.
+
+O consumidor **continua congelado durante todo o reenvio**, mesmo já recebendo
+eventos. Isso é proposital: a validade é medida pelo `eventTimeMs`, o instante
+em que o evento aconteceu, e não pelo instante em que o pacote chegou. Os
+eventos reenviados entram na contabilidade — ocupação é contador acumulado, e
+descartá-los perderia o saldo de quem entrou e saiu durante a queda — mas não
+valem como sinal de que há dado atual. A recomendação só volta quando chegar
+evento recente de fato.
 
 ## Notas de implementação
 
