@@ -107,15 +107,25 @@ em blocos e a demonstração perde o tempo real.
 
 ## O que acontece sozinho
 
-O produtor dispara um pico de chegadas na fila-a aos 12 s, durando 8 s
-(`PICO_INICIO`, `PICO_FIM`, `INTERVALO_PICO`). A partir daí, sem intervenção:
+O consumidor imprime um painel a cada 2 s com as duas filas lado a lado —
+estado, ocupação, vazão, espera estimada e para onde mandar quem chega. As
+mudanças de estado saem destacadas entre os painéis.
+
+O produtor dispara **picos periódicos, alternando de fila**: o primeiro aos
+12 s na fila-a, e daí em diante a cada 40 s, trocando de fila a cada vez
+(`PICO_ATRASO`, `PICO_DURACAO`, `CICLO_PICO`, `INTERVALO_PICO`). Num evento real
+os picos se repetem e não se concentram sempre na mesma entrada; repetir também
+garante que a demonstração sempre tenha um ciclo à vista, sem depender de quem
+apresenta subir o produtor no instante certo.
+
+Cada ciclo, sem intervenção:
 
 1. as duas filas começam verdes e ninguém é desviado
-2. a fila-a passa de 5 e fica amarela; começa a apontar para a fila-b
+2. a fila em pico passa de 5 e fica amarela; começa a apontar para a outra
 3. passa de 10 e fica vermelha
-4. a fila-b absorve os desvios e também enche
-5. a fila-a drena, volta a amarelo e depois a verde
-6. as duas terminam verdes
+4. a outra fila absorve os desvios e também enche
+5. a fila em pico drena, volta a amarelo e depois a verde
+6. as duas terminam verdes, até o próximo pico
 
 ## Queda do enlace
 

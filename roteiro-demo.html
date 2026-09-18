@@ -207,52 +207,59 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
 
   <section>
     <div class="sec-head">
-      <span class="eyebrow">Parte 1 · cerca de 90 segundos · roda sozinho</span>
+      <span class="eyebrow">Parte 1 · roda sozinho, em ciclo</span>
       <h2>O sistema absorvendo um pico</h2>
     </div>
     <div class="prose">
-      <p>Nada a digitar. O produtor dispara um pico de chegadas na fila-a aos 12 s, e o ciclo inteiro acontece na tela.</p>
+      <p>Nada a digitar. O consumidor imprime um painel a cada 2 s e o produtor dispara um pico a cada 40 s, <strong>alternando de fila</strong> — primeiro na fila-a, depois na fila-b, e assim por diante.</p>
+      <p>Isso importa na hora: você não precisa cronometrar nada. Se o professor chegar no meio de uma explicação, o próximo ciclo vem em no máximo 40 segundos.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">consumidor — o painel</span></div>
+<pre>  fila-a  <span class="g">● VERDE</span>    1 na fila   1.1/s   espera  ~0s   permanecer
+  fila-b  <span class="g">● VERDE</span>    1 na fila   1.3/s   espera  ~0s   permanecer
+
+<span class="y">&gt;&gt;&gt; fila-a: VERDE -&gt; AMARELO  (6 na fila)</span>
+
+  fila-a  <span class="y">● AMARELO</span>  5 na fila   1.3/s   espera  ~3s   --&gt; fila-b
+  fila-b  <span class="g">● VERDE</span>    5 na fila   1.1/s   espera  ~4s   permanecer
+
+<span class="r">&gt;&gt;&gt; fila-a: AMARELO -&gt; VERMELHO  (11 na fila)</span>
+
+  fila-a  <span class="r">● VERMELHO</span> 11 na fila   1.3/s   espera  ~8s   --&gt; fila-b
+  fila-b  <span class="y">● AMARELO</span>  5 na fila   1.2/s   espera  ~4s   permanecer</pre>
     </div>
 
     <div class="acts">
       <div class="act act-1">
         <div class="act-head">
-          <span class="act-n">0:00</span>
+          <span class="act-n">1</span>
           <span class="act-t">Regime normal</span>
           <span class="pill">ninguém é desviado</span>
         </div>
-        <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
-<pre><span class="g">● VERDE</span>  fila-a: 1 na fila - permanecer nesta fila
-<span class="g">● VERDE</span>  fila-b: 1 na fila - permanecer nesta fila</pre>
-        </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>Em operação normal o sistema não intervém. Cada fila recomenda a si mesma. Redirecionar sem necessidade só geraria confusão.</em>
+          <em>Em operação normal o sistema não intervém: as duas verdes, as duas dizendo "permanecer". Redirecionar sem necessidade só geraria confusão.</em>
         </div>
       </div>
 
       <div class="act act-3">
         <div class="act-head">
-          <span class="act-n">0:12</span>
+          <span class="act-n">2</span>
           <span class="act-t">O pico chega</span>
           <span class="pill">desvio começa</span>
         </div>
-        <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
-<pre><span class="y">● AMARELO</span>  fila-a: 6 na fila - seguir para fila-b
-<span class="r">● VERMELHO</span>  fila-a: 11 na fila - seguir para fila-b</pre>
-        </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>A fila-a passou de 5 e ficou amarela; passou de 10 e ficou vermelha. Só a partir daí o sistema começa a apontar para a outra fila.</em>
+          <em>Passou de 5, ficou amarela e a coluna da direita mudou para "--&gt; fila-b". Passou de 10, vermelha. Só a partir do amarelo o sistema começa a apontar para a outra fila.</em>
         </div>
       </div>
 
       <div class="act act-2">
         <div class="act-head">
-          <span class="act-n">0:25</span>
-          <span class="act-t">A fila-b absorve</span>
+          <span class="act-n">3</span>
+          <span class="act-t">A outra absorve</span>
           <span class="pill">carga compartilhada</span>
         </div>
         <div class="term">
@@ -268,19 +275,13 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
 
       <div class="act act-1">
         <div class="act-head">
-          <span class="act-n">0:45</span>
+          <span class="act-n">4</span>
           <span class="act-t">Recuperação</span>
-          <span class="pill">volta ao verde</span>
-        </div>
-        <div class="term">
-          <div class="term-bar"><span class="dot"></span><span class="name">consumidor</span></div>
-<pre><span class="y">● AMARELO</span>  fila-a: 8 na fila - permanecer nesta fila
-<span class="g">● VERDE</span>  fila-a: 3 na fila - permanecer nesta fila
-<span class="g">● VERDE</span>  fila-b: 3 na fila - permanecer nesta fila</pre>
+          <span class="pill">e o próximo pico troca de fila</span>
         </div>
         <div class="say">
           <span class="lbl">o que dizer</span>
-          <em>A fila-a drenou porque parou de receber gente. As duas voltam ao verde e o sistema sai de cena. O pico foi absorvido, não eliminado — balanceamento distribui carga, não cria capacidade.</em>
+          <em>A fila drenou porque parou de receber gente, e as duas voltam ao verde. O pico foi absorvido, não eliminado — balanceamento distribui carga, não cria capacidade. No próximo ciclo o pico cai na outra fila: o sistema não tem lado fixo.</em>
         </div>
       </div>
     </div>
@@ -305,7 +306,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         <ul class="ticks">
           <li>Produtor: <code>Sem enlace: evento acumulado na fila local (N pendentes)</code></li>
           <li>Observador silencia</li>
-          <li>Aos 6 s — <strong>espere</strong> — <code>sem dados atualizados - mantendo recomendação anterior</code></li>
+          <li>Aos 6 s — <strong>espere</strong> — o painel apaga: <code>● ------  sem dados</code></li>
         </ul>
         <div class="say">
           <span class="lbl">o que dizer — é o ponto alto da Parte 2</span>
@@ -321,7 +322,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         </div>
         <div class="term">
           <div class="term-bar"><span class="dot"></span><span class="name">observador</span></div>
-<pre>[11:58:21.402] fila-a: contagem seq=64 (latência <span class="r">14449ms</span>)
+<pre>[11:58:21.402] fila-a: contagem seq=64 (latência <span class="r">14451ms</span>)
 <span class="r">ALERTA: fila fila-a sem heartbeat há mais de 8s</span></pre>
         </div>
         <div class="say">
@@ -331,7 +332,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       </div>
     </div>
     <div class="prose">
-      <p>Medido no último ensaio: <strong>106 eventos acumulados</strong> na fila local, <strong>85 reenviados</strong> em ordem na volta, latência máxima de <strong>14 449 ms</strong>, 2 alertas de heartbeat, nenhum crash.</p>
+      <p>Medido no último ensaio: <strong>113 eventos acumulados</strong> na fila local, <strong>92 reenviados</strong> em ordem na volta, latência máxima de <strong>14 451 ms</strong>, 2 alertas de heartbeat, nenhum crash.</p>
     </div>
   </section>
 
@@ -384,7 +385,8 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
       <p>Eles pedem uma mudança ao vivo. Duas ensaiadas, ambas de uma linha, no topo do <code>consumidor.py</code>:</p>
       <p><strong>Mudar o limite do vermelho.</strong> <code>LIMITE_BLOQUEIO = 10</code> para <code>6</code>. A fila-a fecha muito antes e o desvio começa mais cedo.</p>
       <p><strong>Mudar a validade do dado.</strong> <code>VALIDADE_DADOS</code> de 6 s para 2 s. Na queda do enlace o congelamento aparece quase junto com o Ctrl+C.</p>
-      <p>As duas mostram que vocês sabem <strong>onde mora a política</strong> — que é o que a pergunta testa.</p>
+      <p><strong>Mudar o ritmo dos picos.</strong> <code>CICLO_PICO</code> no <code>produtor.py</code>, de 40 para 20. Os picos passam a vir no dobro da frequência e as filas mal têm tempo de drenar.</p>
+      <p>As três mostram que vocês sabem <strong>onde mora a política</strong> — que é o que a pergunta testa.</p>
     </div>
   </section>
 
@@ -399,7 +401,7 @@ python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></
         <tbody>
           <tr><td class="num">Address already in use</td><td>o serviço subiu — <code>sudo systemctl stop mosquitto</code>, e confira o <code>mask</code></td></tr>
           <tr><td class="num">logs em bloco</td><td>faltou o <code>-u</code> no <code>python3</code></td></tr>
-          <tr><td class="num">semáforo não muda</td><td>o pico é aos 12 s e dura 8 s — espere; ou reinicie o produtor</td></tr>
+          <tr><td class="num">semáforo não muda</td><td>o primeiro pico é aos 12 s e eles voltam a cada 40 s — espere</td></tr>
           <tr><td class="num">observador mudo</td><td>subiu antes do broker — reinicie só ele</td></tr>
           <tr><td class="num">nada volta após religar</td><td>espere, a reconexão do paho leva alguns segundos</td></tr>
           <tr><td class="num">DeprecationWarning</td><td>do paho 2.x sobre a API de callback. Inofensivo</td></tr>

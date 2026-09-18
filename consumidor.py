@@ -1,7 +1,9 @@
 import paho.mqtt.client as mqtt
 import json
+import time
 from collections import deque
 from datetime import datetime, timedelta
+import threading
 
 TOPICO_CONTAGEM = "fila/+/contagem"
 TOPICO_VALIDACAO = "fila/+/validacao"
@@ -11,16 +13,20 @@ filas = ["fila-a", "fila-b"]
 
 LIMITE_ATENCAO = 5
 LIMITE_BLOQUEIO = 10
-MARGEM_HISTERESE = 2
+MARGEM_HISTERESE = 3
 VALIDADE_DADOS = timedelta(seconds=6)
 
 NIVEL = {"livre": 0, "atencao": 1, "bloqueada": 2}
+ROTULOS = {"livre": "VERDE", "atencao": "AMARELO", "bloqueada": "VERMELHO"}
+CORES_SEM_DADOS = "\033[90m● ------\033[0m"
 
 CORES = {
     "livre": "\033[92m● VERDE\033[0m",
     "atencao": "\033[93m● AMARELO\033[0m",
     "bloqueada": "\033[91m● VERMELHO\033[0m",
 }
+
+INTERVALO_PAINEL = 2
 
 entradas = {fila: 0 for fila in filas}
 saidas = {fila: 0 for fila in filas}
@@ -130,6 +136,7 @@ def publicar(client, fila, ocupacao, destino, espera):
     if ultima_publicacao[fila] == estado:
         return
 
+    anterior = ultima_publicacao[fila]
     payload = {
         "filaId": fila,
         "semaforo": semaforo[fila],
@@ -140,11 +147,33 @@ def publicar(client, fila, ocupacao, destino, espera):
     client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(payload))
     ultima_publicacao[fila] = estado
 
-    if destino == fila:
-        acao = "permanecer nesta fila"
-    else:
-        acao = f"seguir para {destino}"
-    print(f"{CORES[semaforo[fila]]}  {fila}: {ocupacao} na fila - {acao}")
+    if anterior is not None and anterior[0] != semaforo[fila]:
+        print(f"\n>>> {fila}: {ROTULOS[anterior[0]]} -> {ROTULOS[semaforo[fila]]}"
+              f"  ({ocupacao} na fila)\n")
+
+    if anterior is None:
+        print(f"{CORES[semaforo[fila]]}  {fila} entrou em operação")
+
+def painel():
+    while True:
+        time.sleep(INTERVALO_PAINEL)
+        agora = datetime.now()
+        linhas = []
+        for fila in filas:
+            if ultimo_heartbeat[fila] is None or agora - ultimo_heartbeat[fila] > VALIDADE_DADOS:
+                linhas.append(f"  {fila}  {CORES_SEM_DADOS}  sem dados")
+                continue
+            ocupacao = ocupacao_de(fila)
+            vazao = vazao_de(fila, agora)
+            espera = f"~{int(ocupacao / vazao)}s" if vazao > 0 else "  -"
+            estado = ultima_publicacao[fila]
+            destino = estado[1] if estado else fila
+            seta = "permanecer" if destino == fila else f"--> {destino}"
+            linhas.append(
+                f"  {fila}  {CORES[semaforo[fila]]}  {ocupacao:>2} na fila"
+                f"   {vazao:.1f}/s   espera {espera:>4}   {seta}"
+            )
+        print("\n".join(linhas))
 
 def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPICO_CONTAGEM)
@@ -155,4 +184,5 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect("localhost", 1883, 60)
+threading.Thread(target=painel, daemon=True).start()
 client.loop_forever()

@@ -20,32 +20,38 @@ INTERVALO_CHEGADA = {"fila-a": 1.5, "fila-b": 2.0}
 INTERVALO_ATENDIMENTO = {"fila-a": 0.8, "fila-b": 0.8}
 TAXA_REPROVACAO = 0.15
 
-# Pico de entrada concentrado na fila-a (preferência natural do público por uma
-# das entradas). Começa aos 12s e dura 8s; fora dessa janela o regime é normal.
-PICO_FILA = "fila-a"
-PICO_INICIO = 12
-PICO_FIM = 20
+# Picos de entrada periódicos, alternando de fila. Num evento real os picos se
+# repetem e não se concentram sempre na mesma entrada; repetir também garante
+# que a demonstração sempre tenha um ciclo à vista.
+PICO_ATRASO = 12      # primeiro pico, em segundos após a partida
+PICO_DURACAO = 10     # quanto tempo o pico dura
+CICLO_PICO = 40       # de quanto em quanto tempo ele volta
 INTERVALO_PICO = 0.25
 
 partida = time.monotonic()
-pico_anunciado = {"ativo": False}
+pico_anterior = {"fila": None}
 
-def em_pico():
-    return PICO_INICIO <= time.monotonic() - partida < PICO_FIM
+def fila_em_pico():
+    decorrido = time.monotonic() - partida
+    if decorrido < PICO_ATRASO:
+        return None
+    desde_o_primeiro = decorrido - PICO_ATRASO
+    if desde_o_primeiro % CICLO_PICO >= PICO_DURACAO:
+        return None
+    return filas[int(desde_o_primeiro // CICLO_PICO) % len(filas)]
 
 def intervalo_de_chegada(fila):
-    if fila == PICO_FILA and em_pico():
-        return INTERVALO_PICO
-    return INTERVALO_CHEGADA[fila]
+    return INTERVALO_PICO if fila_em_pico() == fila else INTERVALO_CHEGADA[fila]
 
 def anunciar_pico():
-    ativo = em_pico()
-    if ativo != pico_anunciado["ativo"]:
-        pico_anunciado["ativo"] = ativo
-        if ativo:
-            print(f"\n>>> PICO DE ENTRADA na {PICO_FILA} <<<\n")
+    atual = fila_em_pico()
+    if atual != pico_anterior["fila"]:
+        anterior = pico_anterior["fila"]
+        pico_anterior["fila"] = atual
+        if atual:
+            print(f"\n>>> PICO DE ENTRADA na {atual} <<<\n")
         else:
-            print(f"\n>>> fim do pico - chegadas voltam ao normal <<<\n")
+            print(f"\n>>> fim do pico na {anterior} - chegadas voltam ao normal <<<\n")
 
 na_fila = {fila: 0 for fila in filas}
 destino_atual = {fila: fila for fila in filas}
