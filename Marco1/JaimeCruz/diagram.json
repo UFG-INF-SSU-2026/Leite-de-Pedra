@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "author": "Jaime da Cruz Silva Júnior",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp32", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-potentiometer", "id": "pot_a", "top": -220, "left": 160, "attrs": { "value": "369" } },
+    { "type": "wokwi-potentiometer", "id": "pot_b", "top": -120, "left": 160, "attrs": { "value": "328" } },
+    { "type": "wokwi-pushbutton", "id": "btn_a", "top": -300, "left": 330, "attrs": { "color": "red", "label": "Validar A", "key": "A" } },
+    { "type": "wokwi-pushbutton", "id": "btn_b", "top": -200, "left": 330, "attrs": { "color": "blue", "label": "Validar B", "key": "B" } },
+    { "type": "wokwi-led", "id": "led_a", "top": 140, "left": 330, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "led_b", "top": 230, "left": 330, "attrs": { "color": "yellow" } },
+    { "type": "wokwi-resistor", "id": "r_a", "top": 140, "left": 280, "attrs": { "value": "330" } },
+    { "type": "wokwi-resistor", "id": "r_b", "top": 230, "left": 280, "attrs": { "value": "330" } }
+  ],
+  "connections": [
+    ["$serialMonitor:RX", "esp32:TX0", "", []],
+    ["$serialMonitor:TX", "esp32:RX0", "", []],
+
+    ["esp32:D34", "pot_a:SIG", "green", []],
+    ["esp32:D35", "pot_b:SIG", "green", []],
+    ["esp32:3V3", "pot_a:VCC", "red", []],
+    ["esp32:3V3", "pot_b:VCC", "red", []],
+    ["esp32:GND.1", "pot_a:GND", "black", []],
+    ["esp32:GND.1", "pot_b:GND", "black", []],
+
+    ["esp32:D32", "btn_a:1.l", "blue", []],
+    ["esp32:GND.1", "btn_a:2.l", "black", []],
+
+    ["esp32:D33", "btn_b:1.l", "blue", []],
+    ["esp32:GND.1", "btn_b:2.l", "black", []],
+
+    ["esp32:D25", "led_a:A", "green", []],
+    ["led_a:C", "r_a:1", "green", []],
+    ["r_a:2", "esp32:GND.2", "black", []],
+
+    ["esp32:D26", "led_b:A", "yellow", []],
+    ["led_b:C", "r_b:1", "yellow", []],
+    ["r_b:2", "esp32:GND.2", "black", []]
+  ],
+  "serialMonitor": {
+    "display": "always",
+    "collapse": false,
+    "newline": "lf"
+  }
+}
