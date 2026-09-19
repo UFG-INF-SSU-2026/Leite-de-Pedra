@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "author": "João Pedro de Brito Tomé - 202302612",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": -76.8, "left": -139.2, "attrs": {} },
+
+    { "type": "wokwi-pushbutton", "id": "btnValida", "top": 105.6, "left": 200, "attrs": { "color": "green", "label": "VALIDACAO" } },
+    { "type": "wokwi-slide-switch", "id": "swLink", "top": -220, "left": 190, "attrs": { "label": "ENLACE" } },
+    { "type": "wokwi-potentiometer", "id": "potBat", "top": -40, "left": -360, "attrs": { "label": "BATERIA" } },
+
+    { "type": "wokwi-led", "id": "ledV", "top": -300, "left": -40, "attrs": { "color": "green", "label": "FRESCO" } },
+    { "type": "wokwi-led", "id": "ledA", "top": -300, "left": 20, "attrs": { "color": "yellow", "label": "SEGURANDO" } },
+    { "type": "wokwi-led", "id": "ledR", "top": -300, "left": 80, "attrs": { "color": "red", "label": "SEM_CONFIANCA" } },
+    { "type": "wokwi-led", "id": "ledB", "top": -300, "left": 140, "attrs": { "color": "blue", "label": "OUTBOX" } },
+
+    { "type": "wokwi-resistor", "id": "rV", "top": -240, "left": -40, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rA", "top": -240, "left": 20, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rR", "top": -240, "left": 80, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "rB", "top": -240, "left": 140, "attrs": { "value": "220" } },
+
+    { "type": "wokwi-buzzer", "id": "bz", "top": 100, "left": -320, "attrs": { "volume": "0.1" } }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+
+    [ "btnValida:1.l", "esp:GND.1", "black", [] ],
+    [ "btnValida:2.l", "esp:D4", "green", [] ],
+
+    [ "swLink:1", "esp:GND.2", "black", [] ],
+    [ "swLink:2", "esp:D18", "green", [] ],
+    [ "swLink:3", "esp:3V3", "red", [] ],
+
+    [ "potBat:GND", "esp:GND.1", "black", [] ],
+    [ "potBat:VCC", "esp:3V3", "red", [] ],
+    [ "potBat:SIG", "esp:D34", "blue", [] ],
+
+    [ "esp:D25", "rV:1", "green", [] ],
+    [ "rV:2", "ledV:A", "green", [] ],
+    [ "ledV:C", "esp:GND.3", "black", [] ],
+
+    [ "esp:D26", "rA:1", "yellow", [] ],
+    [ "rA:2", "ledA:A", "yellow", [] ],
+    [ "ledA:C", "esp:GND.3", "black", [] ],
+
+    [ "esp:D27", "rR:1", "red", [] ],
+    [ "rR:2", "ledR:A", "red", [] ],
+    [ "ledR:C", "esp:GND.3", "black", [] ],
+
+    [ "esp:D14", "rB:1", "blue", [] ],
+    [ "rB:2", "ledB:A", "blue", [] ],
+    [ "ledB:C", "esp:GND.3", "black", [] ],
+
+    [ "esp:D13", "bz:1", "green", [] ],
+    [ "bz:2", "esp:GND.1", "black", [] ]
+  ],
+  "dependencies": {}
+}
