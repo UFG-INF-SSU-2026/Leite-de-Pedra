@@ -3,6 +3,9 @@ user produtor
 topic write fila/+/contagem
 topic write fila/+/heartbeat
 topic read fila/+/recomendacao
+
+# ESP32 de sinalização: recebe o estado, mas não pode criar movimentos.
+user sinalizador
 topic read fila/+/estado
 
 # Consumidor: recebe a telemetria e é o único que emite recomendações.

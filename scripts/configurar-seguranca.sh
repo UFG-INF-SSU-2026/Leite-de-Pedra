@@ -6,12 +6,15 @@ PASTA_MQTT="$RAIZ_PROJETO/.local/mqtt"
 RENOVAR_CERTIFICADOS=0
 
 ADICIONAR_VALIDADOR=0
+ADICIONAR_SINALIZADOR=0
 if [[ "${1:-}" == "--renovar-certificados" && "$#" -eq 1 ]]; then
     RENOVAR_CERTIFICADOS=1
 elif [[ "${1:-}" == "--adicionar-validador" && "$#" -eq 1 ]]; then
     ADICIONAR_VALIDADOR=1
+elif [[ "${1:-}" == "--adicionar-sinalizador" && "$#" -eq 1 ]]; then
+    ADICIONAR_SINALIZADOR=1
 elif [[ "$#" -ne 0 ]]; then
-    echo "Uso: $0 [--renovar-certificados|--adicionar-validador]" >&2
+    echo "Uso: $0 [--renovar-certificados|--adicionar-validador|--adicionar-sinalizador]" >&2
     exit 1
 fi
 
@@ -27,16 +30,18 @@ if [[ "$RENOVAR_CERTIFICADOS" -eq 1 && ! -f "$PASTA_MQTT/mosquitto.passwd" ]]; t
     exit 1
 fi
 
-if [[ "$ADICIONAR_VALIDADOR" -eq 1 ]]; then
-    if [[ ! -f "$PASTA_MQTT/mosquitto.passwd" || -e "$PASTA_MQTT/validador.password" ]]; then
-        echo "Credenciais ausentes ou validador já configurado." >&2
+if [[ "$ADICIONAR_VALIDADOR" -eq 1 || "$ADICIONAR_SINALIZADOR" -eq 1 ]]; then
+    papel=validador
+    if [[ "$ADICIONAR_SINALIZADOR" -eq 1 ]]; then papel=sinalizador; fi
+    if [[ ! -f "$PASTA_MQTT/mosquitto.passwd" || -e "$PASTA_MQTT/$papel.password" ]]; then
+        echo "Credenciais ausentes ou $papel já configurado." >&2
         exit 1
     fi
     umask 077
     senha="$(openssl rand -hex 24)"
-    printf '%s\n' "$senha" > "$PASTA_MQTT/validador.password"
-    mosquitto_passwd -b "$PASTA_MQTT/mosquitto.passwd" validador "$senha"
-    echo "Validador adicionado. Reinicie o broker."
+    printf '%s\n' "$senha" > "$PASTA_MQTT/$papel.password"
+    mosquitto_passwd -b "$PASTA_MQTT/mosquitto.passwd" "$papel" "$senha"
+    echo "$papel adicionado. Reinicie o broker."
     exit 0
 fi
 
@@ -76,7 +81,7 @@ openssl x509 -req -sha256 -days 825 \
 
 if [[ "$RENOVAR_CERTIFICADOS" -eq 0 ]]; then
     primeiro=1
-    for papel in produtor consumidor observador validador; do
+    for papel in produtor sinalizador consumidor observador validador; do
         senha="$(openssl rand -hex 24)"
         printf '%s\n' "$senha" > "$PASTA_MQTT/$papel.password"
         if [[ "$primeiro" -eq 1 ]]; then
@@ -93,7 +98,7 @@ chmod 600 "$PASTA_MQTT"/*
 
 echo "CA e certificado criados em $PASTA_MQTT."
 if [[ "$RENOVAR_CERTIFICADOS" -eq 0 ]]; then
-    echo "Credenciais dos quatro papéis criadas em $PASTA_MQTT."
+    echo "Credenciais dos cinco papéis criadas em $PASTA_MQTT."
 else
     echo "Credenciais preservadas. Reinicie o broker."
 fi
