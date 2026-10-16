@@ -12,6 +12,7 @@ from pathlib import Path
 # O banco é um só, na raiz, e serve aos três componentes.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from banco import BancoEmMemoria
+from mqtt_config import conectar
 
 TOPICO_CONTAGEM = "fila/{}/contagem"
 TOPICO_VALIDACAO = "fila/{}/validacao"
@@ -129,7 +130,8 @@ def publicar_evento(client, fila, tipo, extra=None):
 
     with trava_envio:
         esvaziar_fila_local(client)
-        entregar(client, topico_de(fila, tipo), payload)
+        cliente_destino = client_validador if tipo == "validacao" else client
+        entregar(cliente_destino, topico_de(fila, tipo), payload)
 
 def entregar(client, topico, payload):
     if client.publish(topico, json.dumps(payload)).rc != mqtt.MQTT_ERR_SUCCESS:
@@ -141,7 +143,8 @@ def entregar(client, topico, payload):
 def esvaziar_fila_local(client):
     while fila_local:
         topico, payload = fila_local[0]
-        if client.publish(topico, json.dumps(payload)).rc != mqtt.MQTT_ERR_SUCCESS:
+        cliente_destino = client_validador if topico.endswith("/validacao") else client
+        if cliente_destino.publish(topico, json.dumps(payload)).rc != mqtt.MQTT_ERR_SUCCESS:
             return
         fila_local.popleft()
         print(f"Reenviado da fila local: {topico} = {payload}")
@@ -209,14 +212,21 @@ def on_recomendacao(client, userdata, msg):
     destino_atual[payload["filaId"]] = payload["sentidoRecomendado"]
     motivo_atual[payload["filaId"]] = payload.get("motivo")
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code != 0:
+        print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
+        return
     client.subscribe(TOPICO_RECOMENDACAO)
+    print("Conectado ao broker - assinatura restabelecida")
 
-client = mqtt.Client()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client_validador = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_recomendacao
-client.connect("localhost", 1883, 60)
+conectar(client, "produtor")
+conectar(client_validador, "validador")
 client.loop_start()
+client_validador.loop_start()
 
 print(f"Produtor com {quantidade} filas: {', '.join(filas)}\n")
 

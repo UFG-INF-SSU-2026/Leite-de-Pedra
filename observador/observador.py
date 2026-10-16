@@ -7,6 +7,7 @@ from pathlib import Path
 # O banco é um só, na raiz, e serve aos três componentes.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from banco import BancoEmMemoria
+from mqtt_config import conectar
 
 TOPICO_TODAS_FILAS = "fila/#"
 
@@ -37,12 +38,15 @@ def on_message(client, userdata, msg):
         if fila not in ultimo_heartbeat or datetime.now() - ultimo_heartbeat[fila] > timedelta(seconds=8):
             print(f"ALERTA: fila {fila} sem heartbeat há mais de 8s - enlace pode estar caído")
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code != 0:
+        print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
+        return
     client.subscribe(TOPICO_TODAS_FILAS)
     print("Conectado ao broker - assinatura restabelecida")
 
-client = mqtt.Client()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_message
-client.connect("localhost", 1883, 60)
+conectar(client, "observador")
 client.loop_forever()

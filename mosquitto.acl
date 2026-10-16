@@ -1,0 +1,23 @@
+# Produtor: envia somente telemetria e recebe a decisão do consumidor.
+user produtor
+topic write fila/+/contagem
+topic write fila/+/heartbeat
+topic read fila/+/recomendacao
+topic read fila/+/estado
+
+# Consumidor: recebe a telemetria e é o único que emite recomendações.
+user consumidor
+topic read fila/+/contagem
+topic read fila/+/validacao
+topic read fila/+/heartbeat
+topic write fila/+/recomendacao
+topic write fila/+/estado
+
+# Validador do navegador: publica apenas passagens de ticket.
+user validador
+topic write fila/+/validacao
+topic read fila/+/estado
+
+# Observador: papel estritamente de leitura.
+user observador
+topic read fila/#

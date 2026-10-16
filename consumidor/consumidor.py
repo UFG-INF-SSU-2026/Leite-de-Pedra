@@ -11,11 +11,14 @@ from pathlib import Path
 # O banco é um só, na raiz, e serve aos três componentes.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from banco import BancoEmMemoria
+from estado_filas import EstadoFilas
+from mqtt_config import conectar
 
 TOPICO_CONTAGEM = "fila/+/contagem"
 TOPICO_VALIDACAO = "fila/+/validacao"
 TOPICO_HEARTBEAT = "fila/+/heartbeat"
 TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
+TOPICO_ESTADO = "fila/{}/estado"
 
 # As filas não são declaradas: o consumidor as descobre pelos tópicos que
 # chegam. Assim ele não precisa ser reiniciado nem reconfigurado quando o
@@ -40,6 +43,7 @@ VALIDADE_DADOS = timedelta(seconds=6)
 # diluída por um período em que não havia ninguém para atender - o que faria a
 # espera parecer maior do que é.
 JANELA_VAZAO = timedelta(seconds=90)
+TEMPO_PASSAGEM_INICIAL = 7  # estimativa até observar ao menos duas validações
 
 NIVEL = {"livre": 0, "atencao": 1, "bloqueada": 2}
 ROTULOS = {"livre": "VERDE", "atencao": "AMARELO", "bloqueada": "VERMELHO"}
@@ -54,12 +58,14 @@ CORES = {
 INTERVALO_PAINEL = 2
 
 banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
+estado_persistente = EstadoFilas()
 entradas = {}
 saidas = {}
 fila_saidas = {}
 semaforo = {}
 ultima_publicacao = {}
 ultimo_heartbeat = {}
+ultimo_estado_publicado = {}
 
 def registrar(fila):
     if fila in entradas:
@@ -70,28 +76,41 @@ def registrar(fila):
     semaforo[fila] = "livre"
     ultima_publicacao[fila] = None
     ultimo_heartbeat[fila] = None
+    ultimo_estado_publicado[fila] = None
     filas.append(fila)
     filas.sort()
     print(f"Fila descoberta: {fila} ({len(filas)} no total)")
 
 def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
-    banco.inserir(msg.topic, payload)
-    fila = payload["filaId"]
+    partes = msg.topic.split("/")
+    if len(partes) != 3 or partes[0] != "fila":
+        return
+    fila, tipo = partes[1], partes[2]
+    if payload.get("filaId") != fila or tipo not in {"contagem", "validacao", "heartbeat"}:
+        print(f"Evento inválido em {msg.topic}: tópico e payload divergentes")
+        return
+    if "eventTimeMs" not in payload:
+        print(f"Evento sem eventTimeMs em {msg.topic}")
+        return
     registrar(fila)
 
-    if msg.topic.endswith("/contagem"):
-        entradas[fila] += 1
-        atualizar_heartbeat(fila, payload)
-
-    elif msg.topic.endswith("/validacao"):
-        if payload["resultado"] == "aprovado":
-            saidas[fila] += 1
+    if tipo in {"contagem", "validacao"}:
+        if tipo == "validacao" and payload.get("resultado") not in {"aprovado", "reprovado"}:
+            print(f"Resultado de validação inválido em {msg.topic}")
+            return
+        saidas_antes = saidas[fila]
+        novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, tipo, payload)
+        if not novo:
+            return
+        banco.inserir(msg.topic, payload)
+        if tipo == "validacao" and saidas[fila] > saidas_antes:
             instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
         atualizar_heartbeat(fila, payload)
 
-    elif msg.topic.endswith("/heartbeat"):
+    elif tipo == "heartbeat":
+        banco.inserir(msg.topic, payload)
         # Não entra na contabilidade: só prova que o enlace está vivo quando
         # não há movimento na fila. Sem ele o consumidor se declararia sem
         # dados em qualquer período calmo, com o enlace perfeito.
@@ -140,17 +159,15 @@ def espera_de(fila, agora):
     if ocupacao == 0:
         return 0
 
-    # Fila com gente e nenhuma passagem recente pode ser duas coisas muito
-    # diferentes. Se esta fila JÁ atendeu alguém antes e parou, o validador
-    # travou: a espera é indeterminada e o seguro é fechar. Se ela nunca
-    # atendeu ninguém, é só uma fila recém-aberta - não há o que concluir, e
-    # declarar bloqueio aí fecharia a fila na chegada da primeira pessoa.
+    # Antes de medir a vazão, usa uma duração inicial por pessoa. Assim uma
+    # fila que cresce já pode ficar amarela ou vermelha. Após atender pessoas,
+    # se passar a janela inteira sem saída, considera o validador parado.
     if not passagens_recentes(fila, agora):
-        return float("inf") if fila_saidas[fila] else None
+        return float("inf") if fila_saidas[fila] else ocupacao * TEMPO_PASSAGEM_INICIAL
 
     vazao = vazao_de(fila, agora)
     if vazao == 0:
-        return None
+        return ocupacao * TEMPO_PASSAGEM_INICIAL
     return ocupacao / vazao
 
 def classificar(fila, espera):
@@ -245,6 +262,22 @@ def recomendar_fila(client):
 
         motivo = motivo_de(fila, destino, ocupacao, tempo_espera)
         publicar(client, fila, ocupacao[fila], destino, tempo_espera[fila], motivo)
+        publicar_estado(client, fila, ocupacao[fila], destino, tempo_espera[fila])
+
+def publicar_estado(client, fila, ocupacao, destino, espera):
+    estado = (semaforo[fila], ocupacao, destino, int(espera) if espera is not None and espera != float("inf") else None)
+    if ultimo_estado_publicado[fila] == estado:
+        return
+    payload = {
+        "filaId": fila,
+        "semaforo": estado[0],
+        "ocupacao": estado[1],
+        "sentidoRecomendado": estado[2],
+        "tempoEsperaEstimado": estado[3],
+    }
+    resultado = client.publish(TOPICO_ESTADO.format(fila), json.dumps(payload), qos=1, retain=True)
+    if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
+        ultimo_estado_publicado[fila] = estado
 
 def publicar(client, fila, ocupacao, destino, espera, motivo):
     estado = (semaforo[fila], destino)
@@ -262,7 +295,7 @@ def publicar(client, fila, ocupacao, destino, espera, motivo):
             int(espera) if espera is not None and espera != float("inf") else None
         ),
     }
-    client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(payload))
+    client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(payload), qos=1, retain=True)
     ultima_publicacao[fila] = estado
 
     if anterior is not None and anterior != estado:
@@ -302,15 +335,28 @@ def painel():
             )
         print("\n".join(linhas))
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, reason_code, properties):
+    if reason_code != 0:
+        print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
+        return
     client.subscribe(TOPICO_CONTAGEM)
     client.subscribe(TOPICO_VALIDACAO)
     client.subscribe(TOPICO_HEARTBEAT)
+    # Um broker reiniciado perde publicações retidas; republicar após o
+    # primeiro heartbeat sem depender de mudança no estado da fila.
+    for fila in filas:
+        ultima_publicacao[fila] = None
+        ultimo_estado_publicado[fila] = None
     print("Conectado ao broker - assinaturas restabelecidas")
 
-client = mqtt.Client()
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_message
-client.connect("localhost", 1883, 60)
+for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
+    registrar(fila_salva)
+    entradas[fila_salva] = entradas_salvas
+    saidas[fila_salva] = saidas_salvas
+    print(f"Estado recuperado: {fila_salva}, {ocupacao_de(fila_salva)} pessoa(s)")
+conectar(client, "consumidor")
 threading.Thread(target=painel, daemon=True).start()
 client.loop_forever()

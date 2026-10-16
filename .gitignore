@@ -3,3 +3,9 @@ __pycache__/
 .venv
 eventos.json
 eventos.json.tmp
+.local/
+wokwi/.pio/
+wokwi/include/segredos.h
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
