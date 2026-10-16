@@ -34,9 +34,9 @@ LIMITE_ATENCAO = 15        # segundos de espera estimada
 LIMITE_BLOQUEIO = 30
 MARGEM_HISTERESE = 7
 
-# Este aqui é de rede, não de fila: quanto tempo sem evento novo até o
-# consumidor parar de sinalizar. Não tem relação com os limiares acima.
-VALIDADE_DADOS = timedelta(seconds=6)
+# Este aqui é de rede, não de fila: limite sem heartbeat RECEBIDO pelo
+# consumidor. A folga considera o Wokwi rodando abaixo de 100% da velocidade.
+VALIDADE_DADOS_SEGUNDOS = 15
 
 # A vazão é medida só sobre as passagens recentes. Sem esse corte, uma fila que
 # ficou vazia por um tempo arrasta na janela validações antigas e a taxa sai
@@ -64,7 +64,7 @@ saidas = {}
 fila_saidas = {}
 semaforo = {}
 ultima_publicacao = {}
-ultimo_heartbeat = {}
+ultimo_heartbeat_recebido = {}
 ultimo_estado_publicado = {}
 
 def registrar(fila):
@@ -75,7 +75,7 @@ def registrar(fila):
     fila_saidas[fila] = deque(maxlen=20)
     semaforo[fila] = "livre"
     ultima_publicacao[fila] = None
-    ultimo_heartbeat[fila] = None
+    ultimo_heartbeat_recebido[fila] = None
     ultimo_estado_publicado[fila] = None
     filas.append(fila)
     filas.sort()
@@ -107,26 +107,18 @@ def on_message(client, userdata, msg):
         if tipo == "validacao" and saidas[fila] > saidas_antes:
             instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
-        atualizar_heartbeat(fila, payload)
-
     elif tipo == "heartbeat":
         banco.inserir(msg.topic, payload)
         # Não entra na contabilidade: só prova que o enlace está vivo quando
         # não há movimento na fila. Sem ele o consumidor se declararia sem
         # dados em qualquer período calmo, com o enlace perfeito.
-        atualizar_heartbeat(fila, payload)
+        ultimo_heartbeat_recebido[fila] = time.monotonic()
 
     recomendar_fila(client)
 
-def atualizar_heartbeat(fila, payload):
-    # O frescor é medido pelo instante em que o evento ACONTECEU, não pelo
-    # instante em que o pacote chegou. Na volta de uma queda o produtor reenvia
-    # o que acumulou: esses eventos entram na contabilidade, porque ninguém que
-    # passou pela fila pode ser perdido, mas não fazem o consumidor se declarar
-    # atualizado. A recomendação só volta quando chegar evento recente de fato.
-    origem = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
-    if ultimo_heartbeat[fila] is None or origem > ultimo_heartbeat[fila]:
-        ultimo_heartbeat[fila] = origem
+def heartbeat_recente(fila, agora_monotonico):
+    ultimo = ultimo_heartbeat_recebido[fila]
+    return ultimo is not None and agora_monotonico - ultimo <= VALIDADE_DADOS_SEGUNDOS
 
 def ocupacao_de(fila):
     return max(0, entradas[fila] - saidas[fila])
@@ -235,10 +227,11 @@ def motivo_de(fila, destino, ocupacao, tempo_espera):
 
 def recomendar_fila(client):
     agora = datetime.now()
+    agora_monotonico = time.monotonic()
 
     atualizadas = [
         fila for fila in filas
-        if ultimo_heartbeat[fila] is not None and agora - ultimo_heartbeat[fila] <= VALIDADE_DADOS
+        if heartbeat_recente(fila, agora_monotonico)
     ]
 
     ocupacao = {}
@@ -312,9 +305,10 @@ def painel():
     while True:
         time.sleep(INTERVALO_PAINEL)
         agora = datetime.now()
+        agora_monotonico = time.monotonic()
         linhas = []
         for fila in filas:
-            if ultimo_heartbeat[fila] is None or agora - ultimo_heartbeat[fila] > VALIDADE_DADOS:
+            if not heartbeat_recente(fila, agora_monotonico):
                 linhas.append(f"  {fila}  {CORES_SEM_DADOS}  sem dados")
                 continue
             ocupacao = ocupacao_de(fila)
@@ -347,6 +341,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
     for fila in filas:
         ultima_publicacao[fila] = None
         ultimo_estado_publicado[fila] = None
+        ultimo_heartbeat_recebido[fila] = None
     print("Conectado ao broker - assinaturas restabelecidas")
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
