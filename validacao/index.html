@@ -8,7 +8,7 @@
     :root { font-family: system-ui, sans-serif; color: #eef3fa; background: #101722; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; padding: 28px; }
-    main { max-width: 850px; margin: 0 auto; }
+    main { max-width: 1200px; margin: 0 auto; }
     .eyebrow { color: #9db5d4; text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; }
     h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.4rem); }
     p { color: #b6c4d7; line-height: 1.55; }
@@ -26,6 +26,14 @@
     button:hover:not(:disabled) { background: #bddcff; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .meta { font-size: .89rem; margin: 18px 0 0; min-height: 1.4em; }
+    .logs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-top: 16px; }
+    .logs section { background: #0a0f17; border: 1px solid #36485e; border-radius: 12px; overflow: hidden; }
+    .logs h3 { margin: 0; padding: 8px 12px; font-size: .85rem; color: #9db5d4; background: #1c2939; display: flex; justify-content: space-between; gap: 8px; }
+    .logs .situacao { font-weight: 600; }
+    .logs .situacao.rodando { color: #38d589; }
+    .logs .situacao.parado { color: #fb6c68; }
+    .logs section.parado pre { opacity: .45; }
+    .logs pre { margin: 0; padding: 10px 12px; height: 240px; overflow: auto; font-size: .75rem; line-height: 1.4; color: #cfe0f5; white-space: pre-wrap; word-break: break-word; }
     #aviso { margin-top: 24px; min-height: 1.5em; color: #ffce7d; }
   </style>
 </head>
@@ -40,6 +48,8 @@
       <article data-fila="fila-b"><div class="top"><h2>Fila B</h2><span class="lamp" aria-label="Estado da fila B"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila B</button><p class="meta">Aguardando dados...</p></article>
     </div>
     <p id="aviso" role="status" aria-live="polite"></p>
+    <h2 style="margin-top:36px">Terminais e simulações</h2>
+    <div class="logs" id="logs"></div>
   </main>
   <script>
     const aviso = document.querySelector('#aviso');
@@ -88,8 +98,40 @@
         await atualizar();
       });
     }
+    const paineis = {};
+    async function atualizarLogs() {
+      if (location.protocol === 'file:') return;
+      try {
+        const dados = await (await fetch('/api/logs', {cache: 'no-store'})).json();
+        for (const nome of Object.keys(dados)) {
+          if (!paineis[nome]) {
+            const secao = document.createElement('section');
+            secao.innerHTML = `<h3><span class="nome"></span><span class="situacao"></span></h3><pre></pre>`;
+            secao.querySelector('.nome').textContent = nome;
+            document.querySelector('#logs').append(secao);
+            paineis[nome] = secao;
+          }
+          const {linhas, rodando, atualizadoEm, porta} = dados[nome];
+          const secao = paineis[nome];
+          secao.querySelector('.nome').textContent = `${nome} · ${porta}`;
+          const hora = atualizadoEm
+            ? new Date(atualizadoEm * 1000).toLocaleTimeString('pt-BR')
+            : '—';
+          const situacao = secao.querySelector('.situacao');
+          situacao.className = 'situacao ' + (rodando ? 'rodando' : 'parado');
+          situacao.textContent = `${rodando ? '● rodando' : '● parado'} · última linha ${hora}`;
+          secao.classList.toggle('parado', !rodando);
+          const pre = secao.querySelector('pre');
+          const noFim = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 20;
+          pre.textContent = linhas.join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+          if (noFim) pre.scrollTop = pre.scrollHeight;
+        }
+      } catch {}
+    }
     atualizar();
+    atualizarLogs();
     setInterval(atualizar, 1000);
+    setInterval(atualizarLogs, 1000);
   </script>
 </body>
 </html>

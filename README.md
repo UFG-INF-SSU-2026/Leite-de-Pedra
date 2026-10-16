@@ -168,13 +168,17 @@ renovar o certificado para adicionar apenas esse usuário.
 Para a demonstração integrada, use quatro terminais na raiz do projeto:
 
 ```
-./scripts/iniciar-broker.sh                 # terminal 1
-python3 -u consumidor/consumidor.py        # terminal 2
-python3 -u observador/observador.py        # terminal 3
-python3 -u validacao/servidor.py            # terminal 4
+mkdir -p .local/logs
+./scripts/iniciar-broker.sh 2>&1 | tee .local/logs/broker.log                    # terminal 1
+python3 -u consumidor/consumidor.py 2>&1 | tee .local/logs/consumidor.log        # terminal 2
+python3 -u observador/observador.py 2>&1 | tee .local/logs/observador.log        # terminal 3
+python3 -u validacao/servidor.py 2>&1 | tee .local/logs/validador.log            # terminal 4
 ```
 
-Abra `http://localhost:8000` no navegador. Compile **ambos** os firmwares na
+Abra `http://localhost:8000` no navegador. Abaixo das filas, a página mostra
+as últimas linhas de cada terminal (lidas de `.local/logs/`) e a serial de
+cada ESP32: o Wokwi expõe a serial dos sensores na porta 4000 e a do
+sinalizador na 4001 (`rfc2217ServerPort` nos `wokwi.toml`). Compile **ambos** os firmwares na
 pasta `wokwi/` com `pio run` (ou PlatformIO: Build). Em uma janela do VS Code,
 selecione `wokwi/wokwi.toml` em `F1 → Wokwi: Select Config File` e inicie o
 simulador: essa janela contém apenas os sensores. Em outra janela/instância do
@@ -218,6 +222,14 @@ mosquitto_sub -h localhost -p 8883 \
 Esse mesmo usuário não consegue publicar, e um cliente anônimo não consegue se
 conectar. As negativas aparecem no log do broker. TLS protege os dados em
 trânsito; os arquivos `eventos.json` não são criptografados em repouso.
+
+Para ver um **firmware sem a senha** tentando entrar, compile o ambiente
+`intruso` (`pio run` já o inclui) e inicie a simulação de
+`wokwi/intruso/wokwi.toml`. Ele usa o mesmo circuito dos sensores e a CA
+(que é pública), mas uma senha inventada para o usuário `produtor`. O serial
+mostra `Falha MQTT: ... (retorno 5)` a cada 3 s, e o log do broker registra
+`wokwi-intruso ... disconnected: not authorised`. Nenhuma contagem chega ao
+consumidor.
 
 Para testar também a restrição de leitura com o broker em execução:
 

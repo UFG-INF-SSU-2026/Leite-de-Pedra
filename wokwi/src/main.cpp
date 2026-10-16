@@ -6,6 +6,15 @@
 #include <time.h>
 #include "segredos.h"
 
+#ifdef INTRUSO
+// Firmware clonado de teste: conhece a CA (pública), mas não a senha do produtor.
+const char *SENHA = "senha-adivinhada";
+const char *ID_CLIENTE = "wokwi-intruso";
+#else
+const char *SENHA = MQTT_SENHA;
+const char *ID_CLIENTE = "wokwi-sensores";
+#endif
+
 // ESP32 de entrada: somente detecta chegadas e publica telemetria.
 // A passagem validada é publicada pelo aplicativo no navegador.
 const char *BROKER = "host.wokwi.internal";
@@ -106,11 +115,12 @@ void verificarSensor(FilaSensor &fila) {
 void conectarMqtt() {
   if (mqtt.connected() || millis() - ultimaTentativa < 3000) return;
   ultimaTentativa = millis();
-  if (mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA)) {
+  if (mqtt.connect(ID_CLIENTE, "produtor", SENHA)) {
     Serial.println("MQTT/TLS autenticado");
     publicarPendentes();
   } else {
-    Serial.printf("Falha MQTT: %d\n", mqtt.lastError());
+    // Retorno 5 do CONNACK = não autorizado pelo broker.
+    Serial.printf("Falha MQTT: %d (retorno %d)\n", mqtt.lastError(), mqtt.returnCode());
   }
 }
 
