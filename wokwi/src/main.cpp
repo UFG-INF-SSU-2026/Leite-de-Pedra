@@ -1,186 +1,206 @@
 #include <Arduino.h>
-#include <Wire.h>
+#include <ArduinoJson.h>
 #include <LiquidCrystal_I2C.h>
+#include <MQTT.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <Wire.h>
+#include <time.h>
+#include "segredos.h"
 
-// Protótipo de hardware de duas filas. Não fala com o broker nem com o
-// consumidor.py: existe para mostrar o que o hardware do ponto de entrada faz.
-//
-// Cada fila tem um botão de chegada, que faz o papel do infravermelho da
-// entrada contando uma pessoa, e um semáforo de três LEDs. O validador facial
-// não tem botão: aprova uma pessoa a cada INTERVALO_APROVACAO_MS enquanto houver
-// alguém na fila. O display mostra o estado das duas filas e qual delas o
-// próximo a chegar deve procurar.
-
-enum Estado { LIVRE, ATENCAO, BLOQUEADA };
-const char *ROTULOS[] = {"LIV", "ATN", "BLQ"};
-
-// O validador do protótipo é mais rápido que o do produtor.py (7 s por pessoa)
-// para que a fila se esvazie a tempo de acompanhar a simulação. Como a espera
-// estimada parte desse tempo, os limiares do consumidor passam a valer com mais
-// gente na fila: amarelo a partir de 8 pessoas, vermelho a partir de 16.
-const unsigned long INTERVALO_APROVACAO_MS = 2000;
-const int TEMPO_MEDIO_PASSAGEM = INTERVALO_APROVACAO_MS / 1000;   // segundos por pessoa
-
-// Mesmos limiares do consumidor.py.
-const int LIMITE_ATENCAO = 15;        // segundos de espera estimada
-const int LIMITE_BLOQUEIO = 30;
-const int MARGEM_HISTERESE = 7;
-
-const unsigned long DEBOUNCE_MS = 40;
-
-struct Botao {
-  uint8_t pino;
-  int ultimaLeitura;
-  int estavel;
-  unsigned long mudouEm;
-};
+// Cada aproximação seguida de afastamento representa uma nova chegada.
+// A passagem validada é publicada pelo aplicativo no navegador.
+const char *BROKER = "host.wokwi.internal";
+const unsigned long INTERVALO_SENSOR_MS = 200;
+const unsigned long INTERVALO_HEARTBEAT_MS = 2000;
+const float LIMIAR_CHEGADA_CM = 60.0;
+const float LIMIAR_LIBERACAO_CM = 100.0;
 
 struct Fila {
-  char nome;
-  Botao chegada;
-  uint8_t leds[3];   // indexado por Estado: verde, amarelo, vermelho
-  int entradas;
-  int saidas;
-  Estado estado;
-  unsigned long ultimaAprovacao;
+  const char *id;
+  char letra;
+  uint8_t trig;
+  uint8_t echo;
+  uint8_t leds[3]; // verde, amarelo, vermelho
+  bool sensorOcupado;
+  int ocupacao;
+  int estado; // -1 sem recomendação; 0 livre, 1 atenção, 2 bloqueada
+  String destino;
 };
 
-const int QUANTIDADE = 2;
-Fila filas[QUANTIDADE] = {
-  {'A', {32, HIGH, HIGH, 0}, {26, 27, 14}, 0, 0, LIVRE, 0},
-  {'B', {18, HIGH, HIGH, 0}, {23, 5, 4},   0, 0, LIVRE, 0},
+Fila filas[2] = {
+  {"fila-a", 'A', 32, 33, {26, 27, 14}, false, 0, -1, "fila-a"},
+  {"fila-b", 'B', 18, 19, {23, 5, 4}, false, 0, -1, "fila-b"},
 };
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);
+WiFiClientSecure tls;
+MQTTClient mqtt(768);
+String bootId;
+uint32_t sequencia = 0;
+unsigned long ultimaLeitura = 0;
+unsigned long ultimoHeartbeat = 0;
+unsigned long ultimaTentativa = 0;
 
-// Ocupação é diferença de contadores acumulados, como no consumidor.
-int ocupacao(const Fila &f) {
-  return max(0, f.entradas - f.saidas);
+struct Pendente { String topico; String payload; };
+Pendente pendentes[32];
+int inicio = 0;
+int quantidadePendente = 0;
+
+void linhaLcd(uint8_t linha, const String &texto) {
+  String ajustado = texto.substring(0, 20);
+  while (ajustado.length() < 20) ajustado += ' ';
+  lcd.setCursor(0, linha);
+  lcd.print(ajustado);
 }
 
-// Neste protótipo não há vazão medida: a espera usa o tempo médio nominal.
-int espera(const Fila &f) {
-  return ocupacao(f) * TEMPO_MEDIO_PASSAGEM;
-}
-
-// Mesma histerese do consumidor: sobe pelo limite, desce só com margem.
-// Sem ela o semáforo piscaria com a espera oscilando em torno do limite.
-Estado classificar(Estado atual, int tempo) {
-  int desceParaLivre = LIMITE_ATENCAO - MARGEM_HISTERESE;
-  int desceParaAtencao = LIMITE_BLOQUEIO - MARGEM_HISTERESE;
-
-  if (atual == BLOQUEADA) {
-    if (tempo <= desceParaLivre) return LIVRE;
-    if (tempo <= desceParaAtencao) return ATENCAO;
-    return BLOQUEADA;
-  }
-  if (atual == ATENCAO) {
-    if (tempo > LIMITE_BLOQUEIO) return BLOQUEADA;
-    if (tempo <= desceParaLivre) return LIVRE;
-    return ATENCAO;
-  }
-  if (tempo > LIMITE_BLOQUEIO) return BLOQUEADA;
-  if (tempo > LIMITE_ATENCAO) return ATENCAO;
-  return LIVRE;
-}
-
-// Fila que o próximo a chegar deve procurar: a de menor espera estimada.
-// Devolve -1 quando todas esperam o mesmo, porque então não há o que indicar
-// e apontar sempre a primeira faria as pessoas se empilharem nela.
-int melhorFila() {
-  int melhor = 0;
-  bool todasIguais = true;
-  for (int i = 1; i < QUANTIDADE; i++) {
-    if (espera(filas[i]) != espera(filas[0])) todasIguais = false;
-    if (espera(filas[i]) < espera(filas[melhor])) melhor = i;
-  }
-  return todasIguais ? -1 : melhor;
-}
-
-bool acionado(Botao &b) {
-  int leitura = digitalRead(b.pino);
-  if (leitura != b.ultimaLeitura) {
-    b.mudouEm = millis();
-    b.ultimaLeitura = leitura;
-  }
-  if (millis() - b.mudouEm >= DEBOUNCE_MS && leitura != b.estavel) {
-    b.estavel = leitura;
-    return leitura == LOW;
-  }
-  return false;
-}
-
-void atualizar() {
-  for (int i = 0; i < QUANTIDADE; i++) {
-    Estado anterior = filas[i].estado;
-    filas[i].estado = classificar(anterior, espera(filas[i]));
-    if (filas[i].estado != anterior) {
-      Serial.printf(">>> fila-%c: %s -> %s  (%ds de espera, %d na fila)\n",
-                    filas[i].nome, ROTULOS[anterior], ROTULOS[filas[i].estado],
-                    espera(filas[i]), ocupacao(filas[i]));
+void atualizarDisplay() {
+  const char *rotulos[] = {"LIV", "ATN", "BLQ"};
+  for (Fila &fila : filas) {
+    String texto = String(fila.letra) + " " +
+      (fila.estado < 0 ? "---" : rotulos[fila.estado]) + "  " +
+      String(fila.ocupacao) + " pessoa(s)";
+    linhaLcd(fila.letra == 'A' ? 0 : 1, texto);
+    for (int cor = 0; cor < 3; cor++) {
+      digitalWrite(fila.leds[cor], fila.estado == cor ? HIGH : LOW);
     }
   }
+  linhaLcd(2, mqtt.connected() ? "MQTT/TLS conectado" : "MQTT desconectado");
+  String destino = filas[0].destino == "fila-b" ? "Ir para fila B" :
+                   filas[1].destino == "fila-a" ? "Ir para fila A" :
+                   "Escolha fila verde";
+  linhaLcd(3, destino);
+}
 
-  for (int i = 0; i < QUANTIDADE; i++) {
-    for (int e = LIVRE; e <= BLOQUEADA; e++) {
-      digitalWrite(filas[i].leds[e], e == filas[i].estado ? HIGH : LOW);
-    }
-
-    char linha[21];
-    snprintf(linha, sizeof(linha), "%c %s %2dp %3ds", filas[i].nome,
-             ROTULOS[filas[i].estado], ocupacao(filas[i]), espera(filas[i]));
-    lcd.setCursor(0, i);
-    lcd.print(linha);
+void receberEstado(String &topico, String &mensagem) {
+  StaticJsonDocument<512> doc;
+  if (deserializeJson(doc, mensagem)) return;
+  const char *id = doc["filaId"] | "";
+  for (Fila &fila : filas) {
+    if (strcmp(id, fila.id) != 0) continue;
+    const char *cor = doc["semaforo"] | "";
+    fila.estado = strcmp(cor, "livre") == 0 ? 0 :
+                  strcmp(cor, "atencao") == 0 ? 1 :
+                  strcmp(cor, "bloqueada") == 0 ? 2 : -1;
+    fila.ocupacao = doc["ocupacao"] | 0;
+    fila.destino = String((const char *)(doc["sentidoRecomendado"] | fila.id));
+    Serial.printf("Estado recebido: %s, %d pessoa(s), %s\n",
+                  fila.id, fila.ocupacao, cor);
+    atualizarDisplay();
+    return;
   }
+}
 
-  int melhor = melhorFila();
-  char indicacao[21];
-  if (melhor < 0) {
-    snprintf(indicacao, sizeof(indicacao), "%-20s", "  Qualquer fila");
+float distanciaCm(const Fila &fila) {
+  digitalWrite(fila.trig, LOW);
+  delayMicroseconds(2);
+  digitalWrite(fila.trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(fila.trig, LOW);
+  unsigned long pulso = pulseIn(fila.echo, HIGH, 30000);
+  return pulso == 0 ? 400.0 : pulso / 58.0;
+}
+
+void enfileirar(const String &topico, const String &payload) {
+  if (quantidadePendente == 32) {
+    Serial.println("Fila local cheia: aproxime novamente após reconexão");
+    return;
+  }
+  int posicao = (inicio + quantidadePendente) % 32;
+  pendentes[posicao] = {topico, payload};
+  quantidadePendente++;
+}
+
+void publicarPendentes() {
+  while (mqtt.connected() && quantidadePendente > 0) {
+    Pendente &evento = pendentes[inicio];
+    if (!mqtt.publish(evento.topico, evento.payload, false, 1)) return;
+    Serial.printf("Publicado: %s = %s\n", evento.topico.c_str(), evento.payload.c_str());
+    evento = {"", ""};
+    inicio = (inicio + 1) % 32;
+    quantidadePendente--;
+  }
+}
+
+void publicarEvento(Fila &fila, const char *tipo) {
+  // Heartbeat é descartável: não ocupa o buffer reservado às chegadas
+  // durante uma queda do broker.
+  if (strcmp(tipo, "heartbeat") == 0 &&
+      (!mqtt.connected() || quantidadePendente > 0)) return;
+  StaticJsonDocument<256> doc;
+  doc["filaId"] = fila.id;
+  doc["tipo"] = tipo;
+  doc["sequence"] = ++sequencia;
+  doc["eventTimeMs"] = static_cast<uint64_t>(time(nullptr)) * 1000;
+  doc["eventId"] = bootId + "-" + String(sequencia);
+  String payload;
+  serializeJson(doc, payload);
+  String topico = String("fila/") + fila.id + "/" + tipo;
+  if (strcmp(tipo, "heartbeat") == 0) {
+    mqtt.publish(topico, payload, false, 1);
   } else {
-    char texto[21];
-    snprintf(texto, sizeof(texto), ">> Ir para fila %c <<", filas[melhor].nome);
-    snprintf(indicacao, sizeof(indicacao), "%-20s", texto);
+    enfileirar(topico, payload);
+    publicarPendentes();
   }
-  lcd.setCursor(0, 3);
-  lcd.print(indicacao);
+}
+
+void verificarSensor(Fila &fila) {
+  float cm = distanciaCm(fila);
+  if (!fila.sensorOcupado && cm <= LIMIAR_CHEGADA_CM) {
+    fila.sensorOcupado = true;
+    Serial.printf("Chegada detectada na %s (%.0f cm)\n", fila.id, cm);
+    publicarEvento(fila, "contagem");
+  } else if (fila.sensorOcupado && cm >= LIMIAR_LIBERACAO_CM) {
+    fila.sensorOcupado = false;
+  }
+}
+
+void conectarMqtt() {
+  if (mqtt.connected() || millis() - ultimaTentativa < 3000) return;
+  ultimaTentativa = millis();
+  if (mqtt.connect("wokwi-filas", "produtor", MQTT_SENHA)) {
+    Serial.println("MQTT/TLS autenticado");
+    mqtt.subscribe("fila/+/estado", 1);
+    publicarPendentes();
+    atualizarDisplay();
+  } else {
+    Serial.printf("Falha MQTT: %d\n", mqtt.lastError());
+  }
 }
 
 void setup() {
   Serial.begin(115200);
-
-  for (int i = 0; i < QUANTIDADE; i++) {
-    pinMode(filas[i].chegada.pino, INPUT_PULLUP);
-    for (int e = LIVRE; e <= BLOQUEADA; e++) pinMode(filas[i].leds[e], OUTPUT);
+  for (Fila &fila : filas) {
+    pinMode(fila.trig, OUTPUT);
+    pinMode(fila.echo, INPUT);
+    for (uint8_t led : fila.leds) pinMode(led, OUTPUT);
   }
-
   lcd.init();
   lcd.backlight();
-
-  Serial.println("Protótipo de hardware: 2 filas");
-  atualizar();
+  linhaLcd(0, "Conectando WiFi...");
+  bootId = String(esp_random(), HEX);
+  WiFi.begin("Wokwi-GUEST", "", 6);
+  while (WiFi.status() != WL_CONNECTED) delay(100);
+  Serial.println("WiFi conectado");
+  configTime(0, 0, "pool.ntp.org");
+  while (time(nullptr) < 1700000000) delay(100);
+  tls.setCACert(MQTT_CA);
+  mqtt.begin(BROKER, 8883, tls);
+  mqtt.onMessage(receberEstado);
+  conectarMqtt();
+  atualizarDisplay();
 }
 
 void loop() {
-  bool mudou = false;
-
-  for (int i = 0; i < QUANTIDADE; i++) {
-    if (acionado(filas[i].chegada)) {
-      filas[i].entradas++;
-      Serial.printf("infravermelho fila-%c: %d na fila\n", filas[i].nome, ocupacao(filas[i]));
-      mudou = true;
-    }
-    // O validador só tem o que aprovar se houver alguém na fila; com a fila
-    // vazia o ciclo apenas passa.
-    if (millis() - filas[i].ultimaAprovacao >= INTERVALO_APROVACAO_MS) {
-      filas[i].ultimaAprovacao = millis();
-      if (ocupacao(filas[i]) > 0) {
-        filas[i].saidas++;
-        Serial.printf("validador fila-%c: aprovado, %d na fila\n", filas[i].nome, ocupacao(filas[i]));
-        mudou = true;
-      }
-    }
+  mqtt.loop();
+  conectarMqtt();
+  if (millis() - ultimaLeitura >= INTERVALO_SENSOR_MS) {
+    ultimaLeitura = millis();
+    for (Fila &fila : filas) verificarSensor(fila);
   }
-
-  if (mudou) atualizar();
+  if (millis() - ultimoHeartbeat >= INTERVALO_HEARTBEAT_MS) {
+    ultimoHeartbeat = millis();
+    for (Fila &fila : filas) publicarEvento(fila, "heartbeat");
+  }
+  publicarPendentes();
 }

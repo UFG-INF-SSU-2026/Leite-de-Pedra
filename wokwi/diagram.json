@@ -6,8 +6,8 @@
     { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
     { "type": "wokwi-lcd2004", "id": "lcd", "top": -250, "left": -100, "attrs": { "pins": "i2c" } },
 
-    { "type": "wokwi-pushbutton", "id": "a_chegada", "top": 260, "left": -230, "attrs": { "color": "blue", "label": "A chegada" } },
-    { "type": "wokwi-pushbutton", "id": "b_chegada", "top": 260, "left": 330, "attrs": { "color": "blue", "label": "B chegada" } },
+    { "type": "wokwi-hc-sr04", "id": "sensor_a", "top": 260, "left": -230, "attrs": { "distance": "400" } },
+    { "type": "wokwi-hc-sr04", "id": "sensor_b", "top": 260, "left": 330, "attrs": { "distance": "400" } },
 
     { "type": "wokwi-led", "id": "led_a_g", "top": 20, "left": -100, "attrs": { "color": "green", "label": "A" } },
     { "type": "wokwi-led", "id": "led_a_y", "top": 80, "left": -100, "attrs": { "color": "yellow", "label": "A" } },
@@ -32,11 +32,15 @@
     [ "esp:VIN", "lcd:VCC", "red", [] ],
     [ "esp:GND.1", "lcd:GND", "black", [] ],
 
-    [ "esp:D32", "a_chegada:1.l", "blue", [] ],
-    [ "a_chegada:2.l", "esp:GND.1", "black", [] ],
+    [ "esp:D32", "sensor_a:TRIG", "blue", [] ],
+    [ "esp:D33", "sensor_a:ECHO", "blue", [] ],
+    [ "esp:VIN", "sensor_a:VCC", "red", [] ],
+    [ "esp:GND.1", "sensor_a:GND", "black", [] ],
 
-    [ "esp:D18", "b_chegada:1.l", "blue", [] ],
-    [ "b_chegada:2.l", "esp:GND.2", "black", [] ],
+    [ "esp:D18", "sensor_b:TRIG", "blue", [] ],
+    [ "esp:D19", "sensor_b:ECHO", "blue", [] ],
+    [ "esp:VIN", "sensor_b:VCC", "red", [] ],
+    [ "esp:GND.2", "sensor_b:GND", "black", [] ],
 
     [ "esp:D26", "r_a_g:1", "green", [] ],
     [ "r_a_g:2", "led_a_g:A", "green", [] ],
