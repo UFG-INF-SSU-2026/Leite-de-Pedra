@@ -1,0 +1,419 @@
+<title>Balanceamento de Filas de Entrada</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600;700&display=swap">
+<style>
+  :root {
+    --ground: #f4f5f7;
+    --panel: #ffffff;
+    --ink: #14171c;
+    --ink-soft: #4a515c;
+    --muted: #767f8c;
+    --line: #dcdfe5;
+    --line-soft: #e8eaef;
+    --accent: #2b52c4;
+    --accent-soft: #eaeefb;
+    --ok: #146b52;
+    --ok-soft: #e2f0ea;
+    --warn: #8a5600;
+    --warn-soft: #f8eeda;
+    --down: #a52218;
+    --down-soft: #fae9e7;
+    --term-bg: #16191f;
+    --term-ink: #d6dae1;
+    --term-dim: #757e8c;
+    --shadow: 0 1px 2px rgba(20,23,28,.06), 0 6px 18px rgba(20,23,28,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0f1216;
+      --panel: #171b21;
+      --ink: #e7eaef;
+      --ink-soft: #b0b8c4;
+      --muted: #838d9b;
+      --line: #2a3038;
+      --line-soft: #222831;
+      --accent: #7f9cf0;
+      --accent-soft: #1c2740;
+      --ok: #6cc4a4;
+      --ok-soft: #14291f;
+      --warn: #d9a441;
+      --warn-soft: #2b2313;
+      --down: #e8867c;
+      --down-soft: #2e1815;
+      --term-bg: #0a0c10;
+      --term-ink: #d6dae1;
+      --term-dim: #6b7482;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0f1216;
+    --panel: #171b21;
+    --ink: #e7eaef;
+    --ink-soft: #b0b8c4;
+    --muted: #838d9b;
+    --line: #2a3038;
+    --line-soft: #222831;
+    --accent: #7f9cf0;
+    --accent-soft: #1c2740;
+    --ok: #6cc4a4;
+    --ok-soft: #14291f;
+    --warn: #d9a441;
+    --warn-soft: #2b2313;
+    --down: #e8867c;
+    --down-soft: #2e1815;
+    --term-bg: #0a0c10;
+    --term-ink: #d6dae1;
+    --term-dim: #6b7482;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 40px 72px;
+  }
+
+  h1, h2, h3 { font-family: "IBM Plex Serif", Georgia, serif; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+  h2 { font-size: clamp(20px, 3.4vw, 25px); font-weight: 600; letter-spacing: -.01em; }
+  h3 { font-size: 16px; font-weight: 600; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    color: var(--muted);
+  }
+
+  header.top { display: flex; flex-direction: column; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  header.top .lede { color: var(--ink-soft); max-width: 62ch; }
+
+  section { padding-block: 34px; border-bottom: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 18px; }
+  section:last-of-type { border-bottom: 0; }
+  .sec-head { display: flex; flex-direction: column; gap: 5px; }
+  .prose { max-width: 66ch; color: var(--ink-soft); display: flex; flex-direction: column; gap: 12px; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+
+  code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .89em; background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 3px; }
+
+  .term { background: var(--term-bg); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+  .term-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .term-bar .dot { width: 9px; height: 9px; border-radius: 50%; background: #3c434e; flex: none; }
+  .term-bar .name { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--term-dim); letter-spacing: .06em; text-transform: uppercase; }
+  .term pre { margin: 0; padding: 13px 14px; overflow-x: auto; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.65; color: var(--term-ink); }
+  .term .c { color: var(--term-dim); }
+  .term .g { color: #6cc4a4; }
+  .term .y { color: #d9a441; }
+  .term .r { color: #e8867c; }
+
+  .acts { display: flex; flex-direction: column; gap: 14px; }
+  .act { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--st); border-radius: 7px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow); }
+  .act-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .act-n { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--st); }
+  .act-t { font-family: "IBM Plex Serif", Georgia, serif; font-size: 17px; font-weight: 600; }
+  .pill { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; padding: 2px 8px; border-radius: 99px; background: var(--st-soft); color: var(--st); margin-left: auto; white-space: nowrap; }
+  .act-1 { --st: var(--ok); --st-soft: var(--ok-soft); }
+  .act-2 { --st: var(--down); --st-soft: var(--down-soft); }
+  .act-3 { --st: var(--warn); --st-soft: var(--warn-soft); }
+
+  .say { border-left: 2px solid var(--accent); padding: 2px 0 2px 13px; color: var(--ink); font-size: 14.5px; }
+  .say em { font-style: italic; }
+  .say .lbl { display: block; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 3px; font-style: normal; }
+
+  ul.ticks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 7px; }
+  ul.ticks li { padding-left: 20px; position: relative; color: var(--ink-soft); font-size: 14.5px; }
+  ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--muted); font-family: "IBM Plex Mono", monospace; }
+
+  .qa { display: flex; flex-direction: column; gap: 16px; }
+  .q { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 15px 17px; display: flex; flex-direction: column; gap: 8px; }
+  .q .ask { font-weight: 600; color: var(--ink); font-size: 14.5px; }
+  .q .ans { color: var(--ink-soft); font-size: 14.5px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tw { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 500; }
+  td { color: var(--ink-soft); }
+  td.num { font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", monospace; color: var(--ink); white-space: nowrap; }
+
+  .warn-box { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent); border-radius: 7px; padding: 14px 16px; color: var(--ink); font-size: 14.5px; }
+  .warn-box .lbl { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--warn); display: block; margin-bottom: 5px; }
+
+  @media (max-width: 480px) {
+    .pill { margin-left: 0; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <span class="eyebrow">Marco 2 · Software para Sistemas Ubíquos · 18/09</span>
+    <h1>Balanceamento de Filas de Entrada</h1>
+    <p class="lede">Roteiro de operação para a verificação. Infravermelho conta quem chega, validador facial conta quem entra, e um semáforo por fila distribui o pico. A fronteira integrada é produtor ↔ consumidor — o que se demonstra é a travessia, não a fórmula.</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Antes de começar</span>
+      <h2>Preparação da máquina</h2>
+    </div>
+    <div class="prose">
+      <p>Já feito nesta máquina. Repetir só se apresentar em outra.</p>
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">preparação — uma vez</span></div>
+<pre>sudo apt install mosquitto mosquitto-clients python3-paho-mqtt
+sudo systemctl stop mosquitto
+sudo systemctl mask mosquitto</pre>
+    </div>
+    <div class="warn-box">
+      <span class="lbl">Por que mask e não disable</span>
+      O pacote sobe o mosquitto como serviço e ele ocupa a 1883. Testando aqui, <code>disable</code> <strong>não segurou</strong> — o serviço voltou a subir sozinho e a demo quebrou com <em>Address already in use</em>. <code>mask</code> bloqueia de vez. Reverter depois: <code>sudo systemctl unmask mosquitto</code>.
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">pré-voo — 10 segundos antes de entrar</span></div>
+<pre>ss -ltn | grep 1883        <span class="c"># não deve retornar nada</span>
+python3 -c "import paho.mqtt.client"   <span class="c"># silêncio = ok</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Montagem</span>
+      <h2>Quatro terminais</h2>
+    </div>
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">cd ubicomp/marco2</span></div>
+<pre><span class="c">#1</span> mosquitto -c mosquitto.conf
+<span class="c">#2</span> python3 -u consumidor.py
+<span class="c">#3</span> python3 -u observador.py
+<span class="c">#4</span> python3 -u produtor.py</pre>
+    </div>
+    <div class="prose">
+      <p>O <code>-u</code> não é detalhe: sem ele o Python segura a saída em buffer e a demonstração perde o tempo real, que é justamente o que está sendo mostrado.</p>
+      <p><strong>Consumidor no maior terminal</strong> — é onde o painel aparece. O observador vem logo depois; ele é quem mostra a latência.</p>
+      <p>A demonstração é com <strong>2 filas</strong>, que é o padrão — nada a passar na linha de comando. O produtor aceita <code>3</code> ou <code>4</code> como argumento se alguém pedir, e nesse caso só ele: o consumidor descobre as filas pelos tópicos que chegam.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Parte 1 · roda sozinho, em ciclo</span>
+      <h2>O sistema absorvendo um pico</h2>
+    </div>
+    <div class="prose">
+      <p>Nada a digitar. O consumidor imprime um painel a cada 2 s e o produtor dispara um pico de 8 s a cada 80 s, <strong>alternando de fila</strong> — o primeiro aos 10 s na fila-a, o seguinte na fila-b, e assim por diante.</p>
+      <p>Isso importa na hora: você não precisa cronometrar nada. Cada ciclo completo (verde &rarr; vermelho &rarr; amarelo &rarr; verde) leva cerca de 60 s, e se o professor chegar no meio de uma explicação o próximo vem em no máximo 80 segundos.</p>
+    </div>
+
+    <div class="term">
+      <div class="term-bar"><span class="dot"></span><span class="name">consumidor — o painel</span></div>
+<pre>  fila-a  <span class="g">● VERDE</span>     espera   ~7s    1 na fila   0.15/s   permanecer
+  fila-b  <span class="g">● VERDE</span>     espera   ~0s    0 na fila   0.14/s   permanecer
+
+<span class="y">&gt;&gt;&gt; fila-a: VERDE -&gt; AMARELO  (17s de espera, 3 na fila)</span>
+
+  fila-a  <span class="y">● AMARELO</span>   espera  ~17s    3 na fila   0.17/s   --&gt; fila-b
+  fila-b  <span class="g">● VERDE</span>     espera   ~7s    1 na fila   0.14/s   permanecer
+
+<span class="r">&gt;&gt;&gt; fila-a: AMARELO -&gt; VERMELHO  (53s de espera, 9 na fila)</span>
+
+  fila-a  <span class="r">● VERMELHO</span>  espera  ~53s    9 na fila   0.17/s   --&gt; fila-b
+  fila-b  <span class="y">● AMARELO</span>   espera  ~19s    3 na fila   0.15/s   permanecer</pre>
+      <p class="prose">A coluna do meio é o que o semáforo decide: <strong>a espera estimada</strong>, não a quantidade de pessoas. Com 7 s por pessoa no validador, amarelo dá por volta de 3 e vermelho por volta de 5.</p>
+    </div>
+
+    <div class="acts">
+      <div class="act act-1">
+        <div class="act-head">
+          <span class="act-n">1</span>
+          <span class="act-t">Regime normal</span>
+          <span class="pill">ninguém é desviado</span>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>Em operação normal o sistema não intervém: as duas verdes, as duas dizendo "permanecer". Redirecionar sem necessidade só geraria confusão.</em>
+        </div>
+      </div>
+
+      <div class="act act-3">
+        <div class="act-head">
+          <span class="act-n">2</span>
+          <span class="act-t">O pico chega</span>
+          <span class="pill">desvio começa</span>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>Passou de 15 segundos de espera, ficou amarela e a última coluna mudou para "--&gt; fila-b". Passou de 30 segundos, vermelha. Só a partir do amarelo o sistema começa a apontar para a outra fila.</em>
+        </div>
+      </div>
+
+      <div class="act act-2">
+        <div class="act-head">
+          <span class="act-n">3</span>
+          <span class="act-t">A outra absorve</span>
+          <span class="pill">carga compartilhada</span>
+        </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><span class="name">produtor</span></div>
+<pre>   (desvio: chegou em fila-a, entrou em fila-b - 3 na fila)
+   (desvio: chegou em fila-a, entrou em fila-b - 4 na fila)</pre>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer — é o ponto alto</span>
+          <em>O produtor assina a recomendação. Quem chega e vê vermelho entra na outra fila. A recomendação não informa apenas — ela muda o comportamento, e é isso que fecha o ciclo.</em>
+        </div>
+      </div>
+
+      <div class="act act-1">
+        <div class="act-head">
+          <span class="act-n">4</span>
+          <span class="act-t">Recuperação</span>
+          <span class="pill">e o próximo pico troca de fila</span>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>A fila drenou porque parou de receber gente, e as duas voltam ao verde. O pico foi absorvido, não eliminado — balanceamento distribui carga, não cria capacidade. No próximo ciclo o pico cai na outra fila: o sistema não tem lado fixo.</em>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Parte 2 · cerca de 2 minutos</span>
+      <h2>Queda do enlace</h2>
+    </div>
+    <div class="prose">
+      <p>Aqui é a fronteira sendo testada. <strong>Ctrl+C no terminal do broker.</strong></p>
+    </div>
+
+    <div class="acts">
+      <div class="act act-2">
+        <div class="act-head">
+          <span class="act-n">QUEDA</span>
+          <span class="act-t">O consumidor congela</span>
+          <span class="pill">espere 6 segundos</span>
+        </div>
+        <ul class="ticks">
+          <li>Produtor: <code>Sem enlace: evento acumulado na fila local (N pendentes)</code></li>
+          <li>Observador silencia</li>
+          <li>Aos 6 s — <strong>espere</strong> — o painel apaga: <code>● ------  sem dados</code></li>
+        </ul>
+        <div class="say">
+          <span class="lbl">o que dizer — é o ponto alto da Parte 2</span>
+          <em>O semáforo tem um estado anterior na memória, e seria fácil continuar exibindo. Mas sem dados novos ele não descreve mais a fila. O consumidor congela e declara o motivo, em vez de sinalizar verde para uma fila que pode estar lotada.</em>
+        </div>
+      </div>
+
+      <div class="act act-3">
+        <div class="act-head">
+          <span class="act-n">VOLTA</span>
+          <span class="act-t">Religa o broker</span>
+          <span class="pill">latência alta</span>
+        </div>
+        <div class="term">
+          <div class="term-bar"><span class="dot"></span><span class="name">observador</span></div>
+<pre>[11:58:21.402] fila-a: contagem seq=64 (latência <span class="r">14451ms</span>)
+<span class="r">ALERTA: fila fila-a sem heartbeat há mais de 8s</span></pre>
+        </div>
+        <div class="say">
+          <span class="lbl">o que dizer</span>
+          <em>Os 14 segundos de latência são a evidência visível: o evento chegou íntegro e ainda assim é informação vencida. Ele descreve uma fila que já mudou.</em>
+        </div>
+        <div class="warn-box">
+          <span class="lbl">não se assuste — é o comportamento certo</span>
+          O painel <strong>continua apagado durante todo o reenvio</strong>, mesmo com eventos chegando. A validade é medida pelo <code>eventTimeMs</code>, não pela hora em que o pacote chegou: os eventos atrasados entram na contagem, mas não valem como prova de que há dado atual. O painel só acende quando chega evento recente de verdade — e aí já com a ocupação acumulada correta. Vale narrar isso, porque parece travamento e é o oposto.
+        </div>
+      </div>
+    </div>
+    <div class="prose">
+      <p>Medido no último ensaio: <strong>113 eventos acumulados</strong> na fila local, <strong>92 reenviados</strong> em ordem na volta, latência máxima de <strong>14 451 ms</strong>, 2 alertas de heartbeat, nenhum crash.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Verificação oral</span>
+      <h2>O que vão perguntar</h2>
+    </div>
+    <div class="qa">
+
+      <div class="q">
+        <span class="ask">Expliquem o contrato.</span>
+        <span class="ans">Telemetria carrega <code>filaId</code>, <code>tipo</code>, <code>sequence</code> e <code>eventTimeMs</code>; validação acrescenta <code>resultado</code>. A identidade é o par <code>(tipo, sequence)</code>. A recomendação devolve <code>semaforo</code>, <code>ocupacao</code>, <code>sentidoRecomendado</code> e <code>tempoEsperaEstimado</code>.<br><br><strong>Sobre versionamento:</strong> ainda não versionamos. O próximo passo seria um <code>schemaVersion</code>; hoje uma mudança de campo quebraria os dois lados.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Por que MQTT e não HTTP?</span>
+        <span class="ans">Múltiplos consumidores. A prova está na tela: o <strong>observador é um terceiro assinante acrescentado sem tocar uma linha do produtor nem do consumidor</strong>. Além disso o fluxo é bidirecional — o produtor assina a recomendação que o consumidor publica. Com HTTP cada lado precisaria conhecer o endereço do outro.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Como vocês medem a ocupação?</span>
+        <span class="ans">Contadores acumulados: quem o infravermelho contou na entrada menos quem o validador aprovou. A vazão vem das passagens recentes (últimas 20, e só as dos últimos 90 s), e não é passagens dividido por tempo: cada passagem registra quanta gente ficou na fila, e só entram na média os intervalos em que havia alguém esperando — senão o tempo de fila vazia entraria na conta como atendimento lento. Tempo de espera é ocupação dividida por vazão.<br><br><strong>Uma decisão:</strong> um <code>reprovado</code> não tira a pessoa da fila, ela continua lá para tentar de novo. Só <code>aprovado</code> conta como saída.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Por que o sistema não fica desviando o tempo todo?</span>
+        <span class="ans">Duas travas. O semáforo tem <strong>histerese</strong>: para descer de estado a espera precisa cair 7 segundos abaixo do limite — sai de vermelho com 23 s e de amarelo com 8 s. Sem isso ele piscaria com a espera oscilando de um segundo. E o desvio compara <strong>estados</strong>, não números: só mandamos gente para uma fila que esteja num nível melhor. Se todas estão igualmente cheias, não há para onde mandar.<br><br>Chegamos nisso porque a primeira versão oscilava de verdade — 120 mudanças de estado em 100 s, onde no último ensaio houve 10 em 185 s.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Qual QoS usaram?</span>
+        <span class="ans">QoS 0. É telemetria: perda ocasional é tolerável e o custo importa. A recuperação da queda não vem do QoS — vem da fila local no produtor, que é política da aplicação. QoS trata entrega no enlace, não garante que a regra foi executada.</span>
+      </div>
+
+      <div class="q">
+        <span class="ask">Onde mora o estado?</span>
+        <span class="ans"><strong>Produtor:</strong> quantas pessoas há em cada fila, fila local de até 200 eventos, contadores de sequência.<br><strong>Consumidor:</strong> entradas e saídas acumuladas, janela de vazão, estado do semáforo, último heartbeat. A política de validade — 6 segundos — está em <code>consumidor.py</code>, na constante <code>VALIDADE_DADOS</code>.<br><strong>Observador:</strong> seu próprio registro de heartbeat, limiar de 8 s. Não decide nada.</span>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Peça na manga</span>
+      <h2>A pequena alteração</h2>
+    </div>
+    <div class="prose">
+      <p>Eles pedem uma mudança ao vivo. Duas ensaiadas, ambas de uma linha, no topo do <code>consumidor.py</code>:</p>
+      <p><strong>Mudar o limite do vermelho.</strong> <code>LIMITE_BLOQUEIO = 30</code> para <code>15</code>. A fila fecha com metade da espera e o desvio começa muito mais cedo.</p>
+      <p><strong>Mudar a validade do dado.</strong> <code>VALIDADE_DADOS</code> de 6 s para 2 s. Na queda do enlace o congelamento aparece quase junto com o Ctrl+C.</p>
+      <p><strong>Mudar o ritmo dos picos.</strong> <code>CICLO_PICO</code> no <code>produtor.py</code>, de 80 para 40. Os picos vêm no dobro da frequência e as filas mal têm tempo de drenar.</p>
+      <p>As três mostram que vocês sabem <strong>onde mora a política</strong> — que é o que a pergunta testa.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Se der errado</span>
+      <h2>Socorro rápido</h2>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Sintoma</th><th>Causa e conserto</th></tr></thead>
+        <tbody>
+          <tr><td class="num">Address already in use</td><td>o serviço subiu — <code>sudo systemctl stop mosquitto</code>, e confira o <code>mask</code></td></tr>
+          <tr><td class="num">logs em bloco</td><td>faltou o <code>-u</code> no <code>python3</code></td></tr>
+          <tr><td class="num">semáforo não muda</td><td>o primeiro pico é aos 10 s e eles voltam a cada 80 s — espere</td></tr>
+          <tr><td class="num">observador mudo</td><td>subiu antes do broker — reinicie só ele</td></tr>
+          <tr><td class="num">nada volta após religar</td><td>espere, a reconexão do paho leva alguns segundos</td></tr>
+          <tr><td class="num">DeprecationWarning</td><td>do paho 2.x sobre a API de callback. Inofensivo</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>

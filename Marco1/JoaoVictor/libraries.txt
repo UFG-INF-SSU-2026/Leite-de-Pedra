@@ -1,0 +1,11 @@
+# Bibliotecas adicionais utilizadas: NENHUMA
+#
+# O firmware usa exclusivamente o core Arduino para ESP32:
+#   - millis(), digitalRead(), digitalWrite(), pinMode()
+#   - analogRead(), analogReadResolution(), analogSetPinAttenuation()
+#   - Serial
+#   - snprintf() da libc
+#
+# A montagem do JSON e feita manualmente com snprintf, sem ArduinoJson,
+# para manter o payload previsivel em memoria e evitar alocacao dinamica
+# dentro do loop de tempo real.

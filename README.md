@@ -239,3 +239,9 @@ python3 scripts/testar-acl.py
 
 Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas com
 `./scripts/configurar-seguranca.sh --renovar-certificados` e reinicie o broker.
+
+## Marcos anteriores
+
+Os entregáveis dos marcos anteriores ficam preservados em pastas próprias:
+[`Marco1/`](Marco1/) (protótipos individuais) e [`Marco2/`](Marco2/)
+(integração produtor → MQTT → consumidor, com seu próprio README).

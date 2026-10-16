@@ -1,0 +1,47 @@
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:1156
+load:0x40078000,len:11456
+ho 0 tail 12 room 4
+load:0x40080400,len:2972
+entry 0x400805dc
+Iniciando prototipo FILA_A / FILA_B
+Simplificacao: potenciometro simula ocupacao, botao simula validacao.
+DADOS_INSUFICIENTES: sem validacoes recentes nas duas filas
+{"eventType":"fila.validacao","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":733,"sequence":0,"value":1.00,"unit":"pessoa","state":"VALIDADA"}
+{"eventType":"fila.validacao","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":899,"sequence":1,"value":1.00,"unit":"pessoa","state":"VALIDADA"}
+Dados recuperados; retomando ultima recomendacao valida
+CANDIDATA_B diff=5.00
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":1000,"sequence":2,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":1000,"sequence":3,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":1000,"sequence":4,"value":10.00,"unit":"min","state":"CANDIDATA_B"}
+[1000 ms] A=10.00 B=5.00 diffB=5.00 state=CANDIDATA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":2000,"sequence":5,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":2000,"sequence":6,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":2000,"sequence":7,"value":10.00,"unit":"min","state":"CANDIDATA_B"}
+[2000 ms] A=10.00 B=5.00 diffB=5.00 state=CANDIDATA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":3000,"sequence":8,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":3000,"sequence":9,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":3000,"sequence":10,"value":10.00,"unit":"min","state":"CANDIDATA_B"}
+[3000 ms] A=10.00 B=5.00 diffB=5.00 state=CANDIDATA_B
+RECOMENDA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":4000,"sequence":11,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":4000,"sequence":12,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":4000,"sequence":13,"value":5.00,"unit":"min","state":"RECOMENDA_B"}
+[4000 ms] A=10.00 B=5.00 diffB=5.00 state=RECOMENDA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":5000,"sequence":14,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":5000,"sequence":15,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":5000,"sequence":16,"value":5.00,"unit":"min","state":"RECOMENDA_B"}
+[5000 ms] A=10.00 B=5.00 diffB=5.00 state=RECOMENDA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":6000,"sequence":17,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":6000,"sequence":18,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":6000,"sequence":19,"value":5.00,"unit":"min","state":"RECOMENDA_B"}
+[6000 ms] A=10.00 B=5.00 diffB=5.00 state=RECOMENDA_B
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-A","eventTimeMs":7000,"sequence":20,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.metrica","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":7000,"sequence":21,"value":3.00,"unit":"pessoas/min","state":"NORMAL"}
+{"eventType":"fila.recomendacao","deviceId":"esp32-portao-01","entityId":"fila-B","eventTimeMs":7000,"sequence":22,"value":5.00,"unit":"min","state":"RECOMENDA_B"}
+[7000 ms] A=10.00 B=5.00 diffB=5.00 state=RECOMENDA_B

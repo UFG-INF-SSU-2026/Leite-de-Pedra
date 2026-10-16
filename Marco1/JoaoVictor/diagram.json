@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "author": "Atividade 03 - Catraca com validacao facial pelo celular",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0,
+      "attrs": {} },
+
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 280, "left": -180,
+      "attrs": { "color": "blue", "label": "PRESENCA", "bounce": "1" } },
+
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": 30, "left": -250,
+      "attrs": { "label": "SCORE FACIAL (ficticio)" } },
+
+    { "type": "wokwi-slide-switch", "id": "sw1", "top": 170, "left": -230,
+      "attrs": { "label": "ENLACE APP" } },
+
+    { "type": "wokwi-led", "id": "led_verde", "top": -10, "left": 320,
+      "attrs": { "color": "green", "label": "LIBERADO" } },
+    { "type": "wokwi-led", "id": "led_vermelho", "top": 70, "left": 320,
+      "attrs": { "color": "red", "label": "NEGADO" } },
+    { "type": "wokwi-led", "id": "led_amarelo", "top": 150, "left": 320,
+      "attrs": { "color": "yellow", "label": "DADO EXPIRADO" } },
+
+    { "type": "wokwi-resistor", "id": "r_verde", "top": 30, "left": 230,
+      "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r_vermelho", "top": 110, "left": 230,
+      "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r_amarelo", "top": 190, "left": 230,
+      "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+
+    [ "esp:GND.1", "btn1:2.l", "black", [ "v20", "h-60" ] ],
+    [ "esp:D4", "btn1:1.l", "green", [ "v60", "h-110" ] ],
+
+    [ "esp:3V3", "pot1:VCC", "red", [ "v-20", "h-140" ] ],
+    [ "esp:GND.2", "pot1:GND", "black", [ "v-10", "h-160" ] ],
+    [ "esp:D34", "pot1:SIG", "purple", [ "v-30", "h-130" ] ],
+
+    [ "esp:3V3", "sw1:3", "red", [ "v10", "h-150" ] ],
+    [ "esp:GND.2", "sw1:1", "black", [ "v30", "h-170" ] ],
+    [ "esp:D5", "sw1:2", "orange", [ "v20", "h-140" ] ],
+
+    [ "esp:D18", "r_verde:1", "green", [ "v-20", "h70" ] ],
+    [ "r_verde:2", "led_verde:A", "green", [ "v0", "h20" ] ],
+    [ "led_verde:C", "esp:GND.3", "black", [ "v70", "h-280" ] ],
+
+    [ "esp:D19", "r_vermelho:1", "red", [ "v0", "h70" ] ],
+    [ "r_vermelho:2", "led_vermelho:A", "red", [ "v0", "h20" ] ],
+    [ "led_vermelho:C", "esp:GND.3", "black", [ "v70", "h-280" ] ],
+
+    [ "esp:D21", "r_amarelo:1", "gold", [ "v20", "h70" ] ],
+    [ "r_amarelo:2", "led_amarelo:A", "gold", [ "v0", "h20" ] ],
+    [ "led_amarelo:C", "esp:GND.3", "black", [ "v70", "h-280" ] ]
+  ],
+  "dependencies": {}
+}
