@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Validação de tickets · Leite de Pedra</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #eef3fa; background: #101722; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 28px; }
+    main { max-width: 850px; margin: 0 auto; }
+    .eyebrow { color: #9db5d4; text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; }
+    h1 { margin: 8px 0; font-size: clamp(2rem, 5vw, 3.4rem); }
+    p { color: #b6c4d7; line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; margin-top: 30px; }
+    article { background: #1c2939; border: 1px solid #36485e; border-radius: 18px; padding: 24px; }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+    h2 { margin: 0; }
+    .lamp { width: 19px; height: 19px; border-radius: 50%; background: #789; box-shadow: 0 0 0 5px #ffffff12; }
+    .livre { background: #38d589; box-shadow: 0 0 22px #38d58988; }
+    .atencao { background: #ffd45b; box-shadow: 0 0 22px #ffd45b88; }
+    .bloqueada { background: #fb6c68; box-shadow: 0 0 22px #fb6c6888; }
+    .numero { font-size: 4.5rem; font-weight: 750; line-height: 1; margin-top: 23px; }
+    .legenda { margin: 4px 0 26px; }
+    button { width: 100%; padding: 15px; border: 0; border-radius: 10px; background: #e9f3ff; color: #152439; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #bddcff; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .meta { font-size: .89rem; margin: 18px 0 0; min-height: 1.4em; }
+    #aviso { margin-top: 24px; min-height: 1.5em; color: #ffce7d; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Leite de Pedra · demonstração local</div>
+    <h1>Validação de tickets</h1>
+    <p>Abra esta página em <a href="http://localhost:8000" style="color:#9dd0ff">http://localhost:8000</a> com <code>python3 -u validacao/servidor.py</code> em execução. Abrir o HTML diretamente não conecta à API.</p>
+    <p>Aproxime uma pessoa de um sensor no Wokwi para registrar a chegada. Depois valide o ticket aqui para registrar a passagem. O consumidor calcula a ocupação e o estado dos LEDs.</p>
+    <div class="grid">
+      <article data-fila="fila-a"><div class="top"><h2>Fila A</h2><span class="lamp" aria-label="Estado da fila A"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila A</button><p class="meta">Aguardando dados...</p></article>
+      <article data-fila="fila-b"><div class="top"><h2>Fila B</h2><span class="lamp" aria-label="Estado da fila B"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila B</button><p class="meta">Aguardando dados...</p></article>
+    </div>
+    <p id="aviso" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const aviso = document.querySelector('#aviso');
+    const nomes = {livre: 'Verde', atencao: 'Amarelo', bloqueada: 'Vermelho'};
+    if (location.protocol === 'file:') {
+      aviso.textContent = 'Abra http://localhost:8000 após iniciar python3 -u validacao/servidor.py na raiz do projeto.';
+      document.querySelectorAll('button').forEach(botao => botao.disabled = true);
+    }
+    async function atualizar() {
+      if (location.protocol === 'file:') return;
+      try {
+        const resposta = await fetch('/api/filas', {cache: 'no-store'});
+        if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+        const dados = await resposta.json();
+        for (const card of document.querySelectorAll('article[data-fila]')) {
+          const fila = card.dataset.fila;
+          const dado = dados[fila];
+          const estado = dado.estado;
+          card.querySelector('.numero').textContent = dado.ocupacao;
+          card.querySelector('button').disabled = dado.ocupacao < 1;
+          const lamp = card.querySelector('.lamp');
+          lamp.className = 'lamp ' + (estado?.semaforo || '');
+          card.querySelector('.meta').textContent = estado
+            ? `${nomes[estado.semaforo] || 'Sem dados'} · espera ${estado.tempoEsperaEstimado ?? '?'} s · seguir ${estado.sentidoRecomendado}`
+            : 'Aguardando o consumidor publicar o estado';
+        }
+        aviso.textContent = '';
+      } catch {
+        aviso.textContent = 'Não foi possível consultar o servidor local. Inicie python3 -u validacao/servidor.py e abra http://localhost:8000.';
+      }
+    }
+    for (const card of document.querySelectorAll('article[data-fila]')) {
+      card.querySelector('button').addEventListener('click', async () => {
+        const botao = card.querySelector('button');
+        botao.disabled = true;
+        try {
+          const resposta = await fetch('/api/validacoes', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({filaId: card.dataset.fila})
+          });
+          const dados = await resposta.json();
+          aviso.textContent = dados.mensagem || dados.erro || 'Falha na validação';
+        } catch {
+          aviso.textContent = 'Falha de conexão com o servidor local.';
+        }
+        await atualizar();
+      });
+    }
+    atualizar();
+    setInterval(atualizar, 1000);
+  </script>
+</body>
+</html>
