@@ -1,4 +1,4 @@
 [wokwi]
 version = 1
-firmware = '../.local/wokwi-platformio/build/esp32dev/firmware.bin'
-elf = '../.local/wokwi-platformio/build/esp32dev/firmware.elf'
+firmware = '../.local/wokwi-platformio/build/sensores/firmware.bin'
+elf = '../.local/wokwi-platformio/build/sensores/firmware.elf'
