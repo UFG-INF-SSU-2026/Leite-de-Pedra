@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segurança do Marco 3</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --fg: #1b2230; --muted: #5b6577; --line: #d9d4c8;
+    --card: #ffffff; --accent: #1f6f5c; --accent-soft: #e2f0eb;
+    --warn: #a4521b; --warn-soft: #f8e9dd; --code: #f0ede5;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11161f; --fg: #e8edf4; --muted: #9aa6b8; --line: #2a3445;
+      --card: #18202c; --accent: #5cc8a6; --accent-soft: #173229;
+      --warn: #f0a26b; --warn-soft: #34231a; --code: #0c1118;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+  body { overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0; padding: clamp(20px, 5vw, 72px) clamp(16px, 7vw, 110px) 90px;
+    display: none; flex-direction: column; justify-content: center; overflow-y: auto;
+  }
+  .slide.ativo { display: flex; }
+  .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: .78rem; margin-bottom: 10px; }
+  h1 { font-size: clamp(2.2rem, 6vw, 4.4rem); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.02em; }
+  h2 { font-size: clamp(1.6rem, 3.6vw, 2.6rem); margin: 0 0 22px; letter-spacing: -.01em; }
+  p, li { font-size: clamp(1rem, 1.6vw, 1.22rem); line-height: 1.55; }
+  .lead { color: var(--muted); max-width: 46em; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; font-size: .98rem; color: var(--muted); }
+  .card.alerta { background: var(--warn-soft); border-color: transparent; }
+  .card.alerta h3 { color: var(--warn); }
+  .card.ok { background: var(--accent-soft); border-color: transparent; }
+  .card.ok h3 { color: var(--accent); }
+  code, pre { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  code { background: var(--code); padding: 1px 6px; border-radius: 5px; font-size: .92em; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; font-size: clamp(.78rem, 1.2vw, .95rem); line-height: 1.5; overflow-x: auto; margin: 0; }
+  pre .c { color: var(--muted); }
+  pre .k { color: var(--accent); font-weight: 600; }
+  .duas { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  table { border-collapse: collapse; width: 100%; font-size: clamp(.9rem, 1.4vw, 1.05rem); }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85em; text-transform: uppercase; letter-spacing: .06em; }
+  td.pode { color: var(--accent); }
+  td.nao { color: var(--warn); }
+  ul { padding-left: 1.2em; margin: 0; }
+  li { margin-bottom: 8px; }
+  svg text { fill: var(--fg); font-family: inherit; }
+  svg .muted { fill: var(--muted); }
+  svg .caixa { fill: var(--card); stroke: var(--line); }
+  svg .broker { fill: var(--accent-soft); stroke: var(--accent); }
+  svg .seta { stroke: var(--accent); stroke-width: 2; fill: none; }
+  svg .tranca { fill: var(--accent); }
+  .vivo { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .vivo.dois { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .vivo section { background: var(--code); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+  .vivo h3 { margin: 0; padding: 6px 10px; font-size: .8rem; display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); }
+  .vivo h3 .on { color: var(--accent); }
+  .vivo h3 .off { color: var(--warn); }
+  .vivo pre { border: 0; border-radius: 0; height: 22vh; font-size: .7rem; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
+  .vivo.dois pre { height: 42vh; font-size: .8rem; }
+  .vivo-aviso { color: var(--warn); }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px clamp(16px, 4vw, 40px); background: linear-gradient(transparent, var(--bg) 40%); }
+  nav button { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font: inherit; cursor: pointer; }
+  nav button:hover { border-color: var(--accent); }
+  .barra { flex: 1; height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .barra div { height: 100%; background: var(--accent); transition: width .25s; }
+  #contador { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 4em; text-align: right; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+  <div class="eyebrow">Leite de Pedra · Marco 3</div>
+  <h1>Segurança no balanceamento de filas</h1>
+  <p class="lead">Como protegemos a comunicação entre os ESP32, o broker MQTT e os serviços Python: criptografia, identidade por componente, menor privilégio, gestão de segredos e validação dos dados.</p>
+  <p class="lead" style="margin-top:28px">Caio Castro Miranda · João Pedro de Brito Tomé · João Victor Braga · Jaime da Cruz</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Ponto de partida</div>
+  <h2>O que poderia dar errado</h2>
+  <div class="grid">
+    <div class="card alerta"><h3>Escuta no enlace</h3><p>O ESP32 usa a rede aberta <code>Wokwi-GUEST</code>. Sem criptografia, qualquer um na rota leria contagens e estados.</p></div>
+    <div class="card alerta"><h3>Dispositivo falso</h3><p>Um broker anônimo deixaria qualquer cliente publicar chegadas e encher a fila artificialmente.</p></div>
+    <div class="card alerta"><h3>Componente fazendo demais</h3><p>Se todos tivessem a mesma senha, o painel de LEDs poderia publicar recomendações ou apagar pessoas da fila.</p></div>
+    <div class="card alerta"><h3>Senha no Git</h3><p>Credenciais embutidas no código vazariam no primeiro <code>git push</code>.</p></div>
+    <div class="card alerta"><h3>Dados inconsistentes</h3><p>Reentregas do MQTT, tópicos trocados ou payloads inválidos distorceriam a ocupação.</p></div>
+    <div class="card alerta"><h3>Credencial no navegador</h3><p>Uma página que fala MQTT direto exporia a senha a quem abrisse o código-fonte.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Arquitetura</div>
+  <h2>Tudo passa por um broker com TLS</h2>
+  <svg viewBox="0 0 900 360" style="width:100%;max-height:58vh" role="img" aria-label="Cinco clientes, cada um com sua identidade, conectam ao broker Mosquitto pela porta 8883 com TLS">
+    <rect class="broker" x="345" y="135" width="210" height="90" rx="14" stroke-width="2"/>
+    <text x="450" y="172" text-anchor="middle" font-weight="700" font-size="20">Mosquitto</text>
+    <text x="450" y="198" text-anchor="middle" class="muted" font-size="15">TLS · 127.0.0.1:8883</text>
+    <g font-size="16">
+      <rect class="caixa" x="20" y="30" width="230" height="64" rx="10"/>
+      <text x="135" y="58" text-anchor="middle" font-weight="600">ESP32 sensores</text>
+      <text x="135" y="80" text-anchor="middle" class="muted" font-size="14">usuário produtor</text>
+      <rect class="caixa" x="20" y="148" width="230" height="64" rx="10"/>
+      <text x="135" y="176" text-anchor="middle" font-weight="600">ESP32 consumidor</text>
+      <text x="135" y="198" text-anchor="middle" class="muted" font-size="14">usuário consumidor</text>
+      <rect class="caixa" x="20" y="266" width="230" height="64" rx="10"/>
+      <text x="135" y="294" text-anchor="middle" font-weight="600">Validador (página)</text>
+      <text x="135" y="316" text-anchor="middle" class="muted" font-size="14">usuário validador</text>
+      <rect class="caixa" x="650" y="70" width="230" height="64" rx="10"/>
+      <text x="765" y="98" text-anchor="middle" font-weight="600">Processador</text>
+      <text x="765" y="120" text-anchor="middle" class="muted" font-size="14">usuário processador</text>
+      <rect class="caixa" x="650" y="226" width="230" height="64" rx="10"/>
+      <text x="765" y="254" text-anchor="middle" font-weight="600">Observador</text>
+      <text x="765" y="276" text-anchor="middle" class="muted" font-size="14">usuário observador</text>
+    </g>
+    <path class="seta" d="M250 62 C300 62 310 150 345 160"/>
+    <path class="seta" d="M250 180 L345 180"/>
+    <path class="seta" d="M250 298 C300 298 310 210 345 200"/>
+    <path class="seta" d="M650 102 C600 102 590 150 555 160"/>
+    <path class="seta" d="M650 258 C600 258 590 210 555 200"/>
+    <g class="tranca">
+      <circle cx="298" cy="105" r="11"/><circle cx="298" cy="180" r="11"/><circle cx="298" cy="255" r="11"/>
+      <circle cx="602" cy="125" r="11"/><circle cx="602" cy="235" r="11"/>
+    </g>
+    <text x="450" y="350" text-anchor="middle" class="muted" font-size="14">● = conexão cifrada e autenticada · nenhum cliente fala diretamente com outro</text>
+  </svg>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Camada 1 · Confidencialidade e integridade</div>
+  <h2>MQTT somente sobre TLS</h2>
+  <div class="duas">
+    <ul>
+      <li>A porta sem criptografia <code>1883</code> foi <strong>removida</strong>. O único listener é <code>8883</code>, com TLS 1.2 ou superior (no log, os clientes Python negociam TLS 1.3 e o ESP32 negocia TLS 1.2 com ECDHE).</li>
+      <li>Usamos uma <strong>CA própria de desenvolvimento</strong>, que assina o certificado do broker para <code>localhost</code>, <code>host.wokwi.internal</code> e <code>127.0.0.1</code>.</li>
+      <li>Todo cliente <strong>verifica</strong> o certificado: o Python usa <code>ssl.create_default_context(cafile=ca.crt)</code> e o ESP32 usa <code>tls.setCACert(MQTT_CA)</code>.</li>
+      <li>O broker escuta apenas em <code>127.0.0.1</code>: ninguém da rede local consegue se conectar a ele.</li>
+    </ul>
+<pre><span class="c"># broker/mosquitto.conf</span>
+<span class="k">listener</span> 8883 127.0.0.1
+<span class="k">allow_anonymous</span> false
+<span class="k">password_file</span> .local/mqtt/mosquitto.passwd
+<span class="k">acl_file</span> broker/mosquitto.acl
+<span class="k">certfile</span> .local/mqtt/broker.crt
+<span class="k">keyfile</span>  .local/mqtt/broker.key
+<span class="k">tls_version</span> tlsv1.2</pre>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Criptografia · Visão geral</div>
+  <h2>Que primitiva protege o quê</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>O que protegemos</th><th>Mecanismo</th><th>Parâmetros no projeto</th></tr></thead>
+    <tbody>
+      <tr><td>Mensagens em trânsito</td><td>TLS com cifra autenticada (AEAD)</td><td><code>AES-256-GCM</code>: sigilo e integridade juntos</td></tr>
+      <tr><td>Chave de cada sessão</td><td>Troca de chaves efêmera</td><td><code>ECDHE</code>, com sigilo direto (<em>forward secrecy</em>)</td></tr>
+      <tr><td>Identidade do broker</td><td>Certificado X.509 assinado pela nossa CA</td><td><code>RSA-2048</code> no broker, <code>RSA-3072</code> na CA, assinatura <code>SHA-256</code></td></tr>
+      <tr><td>Senhas guardadas no broker</td><td>Hash lento com sal</td><td><code>PBKDF2-HMAC-SHA512</code> (formato <code>$7$</code> do Mosquitto)</td></tr>
+      <tr><td>Geração das senhas</td><td>Gerador aleatório criptográfico</td><td><code>openssl rand -hex 24</code>: 192 bits</td></tr>
+      <tr><td>Identificador de cada leitura facial</td><td>Identificador aleatório</td><td><code>uuid4</code>, que não dá para prever nem reaproveitar</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Criptografia · Infraestrutura de chaves</div>
+  <h2>A cadeia de confiança</h2>
+  <svg viewBox="0 0 900 190" style="width:100%;max-height:30vh;margin-bottom:18px" role="img" aria-label="A CA assina o certificado do broker; o cliente confia na CA e por isso aceita o broker">
+    <rect class="broker" x="10" y="40" width="250" height="100" rx="12" stroke-width="2"/>
+    <text x="135" y="78" text-anchor="middle" font-weight="700" font-size="19">CA do projeto</text>
+    <text x="135" y="104" text-anchor="middle" class="muted" font-size="14">RSA-3072 · autoassinada</text>
+    <text x="135" y="124" text-anchor="middle" class="muted" font-size="14">chave privada só em .local/</text>
+    <rect class="caixa" x="325" y="40" width="250" height="100" rx="12"/>
+    <text x="450" y="78" text-anchor="middle" font-weight="700" font-size="19">Certificado do broker</text>
+    <text x="450" y="104" text-anchor="middle" class="muted" font-size="14">RSA-2048 · 825 dias</text>
+    <text x="450" y="124" text-anchor="middle" class="muted" font-size="14">localhost · host.wokwi.internal</text>
+    <rect class="caixa" x="640" y="40" width="250" height="100" rx="12"/>
+    <text x="765" y="78" text-anchor="middle" font-weight="700" font-size="19">Cliente</text>
+    <text x="765" y="104" text-anchor="middle" class="muted" font-size="14">tem só ca.crt (público)</text>
+    <text x="765" y="124" text-anchor="middle" class="muted" font-size="14">Python e ESP32</text>
+    <path class="seta" d="M260 90 L325 90"/><text x="292" y="30" text-anchor="middle" class="muted" font-size="13">assina</text>
+    <path class="seta" d="M575 90 L640 90"/><text x="607" y="30" text-anchor="middle" class="muted" font-size="13">apresenta</text>
+    <text x="450" y="178" text-anchor="middle" class="muted" font-size="14">O cliente confere a assinatura, a validade e o nome: um broker falso não tem um certificado assinado pela CA.</text>
+  </svg>
+  <div class="grid">
+    <div class="card"><h3>CA</h3><p><code>CA:TRUE</code>, uso só para assinar certificados (<code>keyCertSign</code>, <code>cRLSign</code>), validade de 10 anos. A <code>ca.key</code> nunca sai do computador nem vai para o ESP32.</p></div>
+    <div class="card"><h3>Broker</h3><p><code>CA:FALSE</code>, uso <code>serverAuth</code>, nomes alternativos (SAN) para <code>localhost</code>, <code>host.wokwi.internal</code> e <code>127.0.0.1</code>. Validade de 825 dias, até janeiro de 2029.</p></div>
+    <div class="card"><h3>Por que é seguro distribuir a CA</h3><p>O <code>ca.crt</code> contém só a chave <strong>pública</strong>. Ele serve para verificar, não para assinar. O firmware intruso também o tem, e mesmo assim o broker o recusa.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Criptografia · Handshake observado</div>
+  <h2>O que o broker negociou de verdade</h2>
+  <div class="duas">
+<pre><span class="c"># clientes Python (log do broker)</span>
+negotiated <span class="k">TLSv1.3</span>
+cipher TLS_<span class="k">AES_256_GCM</span>_SHA384
+
+<span class="c"># ESP32 consumidor no Wokwi</span>
+negotiated <span class="k">TLSv1.2</span>
+cipher <span class="k">ECDHE</span>-<span class="k">RSA</span>-<span class="k">AES256-GCM</span>-SHA384</pre>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Parte da cifra</th><th>Função</th></tr></thead>
+      <tbody>
+        <tr><td><code>ECDHE</code></td><td>Combina uma chave nova a cada conexão, e ela nunca trafega pela rede.</td></tr>
+        <tr><td><code>RSA</code></td><td>O broker assina o handshake e prova que tem a chave do certificado.</td></tr>
+        <tr><td><code>AES-256-GCM</code></td><td>Cifra os dados e detecta qualquer byte alterado no caminho.</td></tr>
+        <tr><td><code>SHA384</code></td><td>Deriva as chaves da sessão (HKDF ou PRF).</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:18px"><strong>Sigilo direto:</strong> mesmo que a <code>broker.key</code> vaze no futuro, quem gravou o tráfego antes não consegue decifrá-lo, porque as chaves de sessão eram efêmeras.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Criptografia · Senhas</div>
+  <h2>A senha nunca é guardada em texto no broker</h2>
+  <div class="duas">
+    <ul>
+      <li><code>mosquitto_passwd</code> guarda um <strong>hash PBKDF2-HMAC-SHA512 com sal</strong>, não a senha.</li>
+      <li>O sal é aleatório para cada usuário: duas senhas iguais geram hashes diferentes.</li>
+      <li>O PBKDF2 repete o hash muitas vezes, o que deixa o ataque de força bruta mais lento.</li>
+      <li>Com 192 bits de entropia, adivinhar a senha é inviável, mesmo que alguém consiga copiar o <code>mosquitto.passwd</code>.</li>
+      <li>A senha só trafega dentro do túnel TLS, nunca em claro.</li>
+    </ul>
+<pre><span class="c"># .local/mqtt/mosquitto.passwd (formato)</span>
+produtor:<span class="k">$7$</span>&lt;iterações&gt;$&lt;sal&gt;$&lt;hash&gt;
+consumidor:<span class="k">$7$</span>...
+processador:<span class="k">$7$</span>...
+validador:<span class="k">$7$</span>...
+observador:<span class="k">$7$</span>...
+
+<span class="c"># $7$ = PBKDF2 com SHA-512</span></pre>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Camada 2 · Autenticação</div>
+  <h2>Uma identidade para cada componente</h2>
+  <div class="duas">
+    <ul>
+      <li><code>allow_anonymous false</code>: sem usuário e senha, o broker recusa a conexão.</li>
+      <li>São <strong>cinco identidades</strong>: <code>produtor</code>, <code>consumidor</code>, <code>processador</code>, <code>validador</code> e <code>observador</code>.</li>
+      <li>Cada senha é aleatória (<code>openssl rand -hex 24</code>, 192 bits). No broker fica só o hash gerado pelo <code>mosquitto_passwd</code>.</li>
+      <li>Os dois ESP32 têm <strong>senhas diferentes</strong>: se o firmware de um vazar, o outro continua protegido.</li>
+    </ul>
+<pre><span class="c"># mqtt_config.py — usado por todos os clientes Python</span>
+contexto_tls = ssl.create_default_context(cafile=str(ca))
+contexto_tls.minimum_version = ssl.TLSVersion.TLSv1_2
+client.username_pw_set(usuario, _senha_de(papel))
+client.tls_set_context(contexto_tls)
+
+<span class="c">// main.cpp — ESP32 de entrada</span>
+tls.setCACert(MQTT_CA);
+mqtt.begin("host.wokwi.internal", 8883, tls);
+mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Camada 3 · Autorização</div>
+  <h2>Menor privilégio com ACL</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>Identidade</th><th>Pode publicar</th><th>Pode ler</th><th>Não pode</th></tr></thead>
+    <tbody>
+      <tr><td><code>produtor</code></td><td class="pode">contagem, saída, heartbeat</td><td class="nao">nada</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
+      <tr><td><code>consumidor</code></td><td class="nao">nada</td><td class="pode">estado</td><td class="nao">criar chegadas ou saídas</td></tr>
+      <tr><td><code>validador</code></td><td class="pode">leitura facial</td><td class="pode">resultado, estado</td><td class="nao">criar entradas ou saídas, decidir o próprio resultado</td></tr>
+      <tr><td><code>processador</code></td><td class="pode">resultado, recomendação, estado</td><td class="pode">contagem, saída, heartbeat, leitura</td><td class="nao">forjar telemetria</td></tr>
+      <tr><td><code>observador</code></td><td class="nao">nada</td><td class="pode">tudo, menos leitura facial</td><td class="nao">qualquer escrita, ver biometria</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="lead" style="margin-top:18px">O processador é o <strong>único</strong> que pode publicar o estado da fila. Mesmo que um ESP32 seja comprometido, ele não consegue mudar o semáforo de outro componente.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Camada 4 · Gestão de segredos</div>
+  <h2>Nenhuma senha no repositório</h2>
+  <div class="grid">
+    <div class="card"><h3>Pasta isolada</h3><p>Senhas, chaves e certificados ficam em <code>.local/mqtt</code>, com permissão <code>0700</code> na pasta e <code>0600</code> nos arquivos, e o Git ignora a pasta.</p></div>
+    <div class="card"><h3>Geração por script</h3><p><code>configurar-seguranca.sh</code> cria a CA, o certificado do broker e as cinco senhas. O script se <strong>recusa a sobrescrever</strong> uma configuração existente.</p></div>
+    <div class="card"><h3>Evolução sem quebrar</h3><p><code>--adicionar-consumidor</code> e <code>--adicionar-validador</code> incluem um papel novo, e <code>--renovar-certificados</code> troca o certificado, tudo sem mudar as outras senhas.</p></div>
+    <div class="card"><h3>Firmware sem segredo versionado</h3><p><code>preparar-wokwi.py</code> gera <code>segredos.h</code> e <code>segredos_consumidor.h</code>, cada um só com a senha do seu papel e a CA. Os dois arquivos estão no <code>.gitignore</code>.</p></div>
+    <div class="card"><h3>Navegador sem credencial</h3><p>A página do validador conversa só com o servidor Python local, e é o servidor que publica no MQTT como <code>validador</code>.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Camada 5 · Integridade dos dados</div>
+  <h2>Desconfiar do que chega</h2>
+  <div class="duas">
+    <div>
+      <h3 style="margin-top:0">Processador</h3>
+      <ul>
+        <li>Confere se o <code>filaId</code> do payload é igual à fila do tópico.</li>
+        <li>Só aceita os tipos <code>contagem</code>, <code>saida</code>, <code>heartbeat</code> e <code>leitura</code>, e descarta payloads que não são JSON em vez de cair.</li>
+        <li>Só ele decide o resultado do reconhecimento facial: o validador envia a leitura, mas não pode publicar o resultado.</li>
+        <li>Descarta eventos repetidos pelo <code>eventId</code>, com <code>INSERT OR IGNORE</code> no SQLite. Assim, uma reentrega do QoS 1 não conta a mesma pessoa duas vezes.</li>
+        <li>Decide se o enlace está vivo pelo <strong>relógio do próprio processador</strong>, nunca pelo horário que o dispositivo informa.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Servidor do validador e consumidor</h3>
+      <ul>
+        <li>O HTTP escuta só em <code>127.0.0.1:8000</code>.</li>
+        <li>O POST aceita no máximo 1&nbsp;KB, só <code>fila-a</code> ou <code>fila-b</code> e uma referência de foto de até 256 caracteres.</li>
+        <li>Só a referência da foto passa pelo broker; a imagem não chega a nenhum assinante.</li>
+        <li>O <code>eventId</code> é gerado pelo servidor (<code>uuid4</code>), não pelo navegador.</li>
+        <li>O ESP32 consumidor só aplica um estado se o tópico e o <code>filaId</code> coincidirem.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Evidências</div>
+  <h2>Como verificamos</h2>
+  <div class="duas">
+<pre><span class="c">$ python3 broker/testar-acl.py</span>
+ACL de leitura: processador recebeu;
+produtor não recebeu. <span class="k">OK</span>
+
+<span class="c"># log do broker (16/10/2026)</span>
+New client connected ... u'validador'
+Client ... negotiated <span class="k">TLSv1.3</span>
+  cipher TLS_AES_256_GCM_SHA384
+wokwi-consumidor ... u'consumidor'
+Client ... negotiated <span class="k">TLSv1.2</span>
+  cipher ECDHE-RSA-AES256-GCM-SHA384</pre>
+    <ul>
+      <li><strong>ACL de leitura:</strong> o mesmo dado chega ao processador e é bloqueado para o produtor.</li>
+      <li><strong>Sem usuário:</strong> um cliente anônimo recebe <code>Connection Refused: not authorised</code>.</li>
+      <li><strong>Firmware sem a chave:</strong> o ambiente <code>intruso</code> tem a CA, mas uma senha inventada, e o broker o recusa com o retorno 5 (não autorizado). Verificamos que a senha real não está no binário dele.</li>
+      <li><strong>Só leitura:</strong> quando o <code>observador</code> tenta publicar uma contagem, o broker descarta a mensagem sem avisar, e ela não chega ao processador.</li>
+      <li><strong>TLS:</strong> o Python negocia TLS 1.3 e o ESP32 consumidor negocia TLS 1.2 com ECDHE, ambos com AES-256-GCM.</li>
+      <li><strong>Segredos:</strong> <code>git check-ignore</code> confirma que <code>.local/</code> e os arquivos <code>segredos*.h</code> estão fora do controle de versão.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Ao vivo · Firmware sem a chave</div>
+  <h2>O intruso tentando entrar</h2>
+  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validador/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
+  <div class="vivo dois">
+    <section data-log="wokwi-intruso" data-titulo="Serial do ESP32 intruso"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="broker" data-filtro="intruso|not authori" data-titulo="Broker · somente recusas"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+  </div>
+  <p class="lead" style="margin-top:14px">Inicie <code>produtor/intruso/wokwi.toml</code> no VS Code: cada tentativa aparece nos dois lados, e nenhuma contagem chega ao processador.</p>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Ao vivo · Sistema completo</div>
+  <h2>Todos os terminais</h2>
+  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validador/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
+  <div class="vivo">
+    <section data-log="broker"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="processador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="observador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="validador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="wokwi-sensores"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="wokwi-consumidor"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="wokwi-intruso"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Transparência</div>
+  <h2>Limites conhecidos e próximos passos</h2>
+  <div class="grid">
+    <div class="card alerta"><h3>CA de desenvolvimento</h3><p>A CA é autoassinada e só faz sentido na demonstração. Em produção, o certificado precisa vir de uma CA gerenciada, com renovação automática.</p></div>
+    <div class="card alerta"><h3>Senha dentro do firmware</h3><p>Quem tiver acesso físico ao ESP32 consegue ler a flash. A evolução é usar a criptografia de flash do ESP32 ou certificado de cliente (mTLS).</p></div>
+    <div class="card alerta"><h3>Dados em repouso</h3><p>O SQLite não é cifrado; o TLS protege só o trânsito.</p></div>
+    <div class="card alerta"><h3>Payload malformado</h3><p>O processador não trata JSON inválido vindo de um cliente autenticado. A ACL limita quem pode publicar, mas falta um <code>try</code> no parser.</p></div>
+    <div class="card alerta"><h3>Broker apenas local</h3><p>Para levar o broker a outro host, é preciso emitir um certificado com o novo nome e abrir o listener, sem nunca desligar a verificação TLS.</p></div>
+  </div>
+</section>
+
+<section class="slide">
+  <div class="eyebrow">Resumo</div>
+  <h2>Defesa em camadas</h2>
+  <div class="grid">
+    <div class="card ok"><h3>1 · TLS</h3><p>Ninguém lê ou altera mensagens no caminho.</p></div>
+    <div class="card ok"><h3>2 · Identidade</h3><p>Cinco usuários com senhas fortes e distintas, e nenhum acesso anônimo.</p></div>
+    <div class="card ok"><h3>3 · ACL</h3><p>Cada componente faz só o que precisa.</p></div>
+    <div class="card ok"><h3>4 · Segredos</h3><p>Ficam fora do Git e do navegador e são gerados por script.</p></div>
+    <div class="card ok"><h3>5 · Validação</h3><p>O tópico precisa bater com o payload, eventos repetidos são descartados e as entradas são limitadas.</p></div>
+  </div>
+  <p class="lead" style="margin-top:24px">Se um componente for comprometido, o estrago fica restrito ao papel dele.</p>
+</section>
+
+<nav>
+  <button id="ant" aria-label="Slide anterior">←</button>
+  <div class="barra"><div id="prog"></div></div>
+  <span id="contador"></span>
+  <button id="prox" aria-label="Próximo slide">→</button>
+</nav>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let atual = 0;
+  try { atual = Math.min(+location.hash.slice(1) - 1 || 0, slides.length - 1); } catch {}
+  function mostrar(i) {
+    atual = Math.max(0, Math.min(i, slides.length - 1));
+    slides.forEach((s, n) => s.classList.toggle('ativo', n === atual));
+    document.querySelector('#contador').textContent = `${atual + 1} / ${slides.length}`;
+    document.querySelector('#prog').style.width = `${(atual + 1) / slides.length * 100}%`;
+    history.replaceState(null, '', `#${atual + 1}`);
+  }
+  document.querySelector('#ant').onclick = () => mostrar(atual - 1);
+  document.querySelector('#prox').onclick = () => mostrar(atual + 1);
+  addEventListener('keydown', e => {
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); mostrar(atual + 1); }
+    if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); mostrar(atual - 1); }
+    if (e.key === 'Home') mostrar(0);
+    if (e.key === 'End') mostrar(slides.length - 1);
+  });
+  let toqueX = null;
+  addEventListener('touchstart', e => toqueX = e.touches[0].clientX);
+  addEventListener('touchend', e => {
+    if (toqueX === null) return;
+    const dx = e.changedTouches[0].clientX - toqueX;
+    if (Math.abs(dx) > 50) mostrar(atual + (dx < 0 ? 1 : -1));
+    toqueX = null;
+  });
+  mostrar(atual);
+
+  const paineisVivos = [...document.querySelectorAll('.vivo section')];
+  for (const painel of paineisVivos) {
+    painel.querySelector('h3 span').textContent = painel.dataset.titulo || painel.dataset.log;
+  }
+  async function atualizarVivo() {
+    // Só vale para os slides ao vivo visíveis; os outros não precisam de dados.
+    if (!slides[atual].querySelector('.vivo')) return;
+    try {
+      const logs = await (await fetch('/api/logs', {cache: 'no-store'})).json();
+      for (const painel of slides[atual].querySelectorAll('.vivo section')) {
+        const log = logs[painel.dataset.log];
+        if (!log) continue;
+        let linhas = log.linhas;
+        if (painel.dataset.filtro) {
+          const filtro = new RegExp(painel.dataset.filtro, 'i');
+          linhas = linhas.filter(l => filtro.test(l));
+          if (!linhas.length) linhas = ['(nenhuma tentativa recusada ainda)'];
+        }
+        painel.querySelector('h3 span').textContent =
+          `${painel.dataset.titulo || painel.dataset.log} · ${log.porta}`;
+        const hora = log.atualizadoEm ? new Date(log.atualizadoEm * 1000).toLocaleTimeString('pt-BR') : '—';
+        const sit = painel.querySelector('.sit');
+        sit.className = 'sit ' + (log.rodando ? 'on' : 'off');
+        sit.textContent = `${log.rodando ? '● rodando' : '● parado'} · ${hora}`;
+        const pre = painel.querySelector('pre');
+        const noFim = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 20;
+        pre.textContent = linhas.slice(-80).join('\n').replace(/\x1b\[[0-9;]*m/g, '');
+        if (noFim) pre.scrollTop = pre.scrollHeight;
+      }
+    } catch {}
+  }
+  if (location.protocol.startsWith('http')) {
+    setInterval(atualizarVivo, 1000);
+  } else {
+    document.querySelectorAll('.vivo-aviso').forEach(p => p.hidden = false);
+  }
+</script>
+</body>
+</html>

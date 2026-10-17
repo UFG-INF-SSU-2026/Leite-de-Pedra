@@ -1,0 +1,34 @@
+# Produtor: envia somente os movimentos dos sensores e o heartbeat.
+user produtor
+topic write fila/+/contagem
+topic write fila/+/saida
+topic write fila/+/heartbeat
+
+# ESP32 de sinalização: recebe o estado, mas não pode criar movimentos.
+user consumidor
+topic read fila/+/estado
+
+# Processador: recebe movimentos e leituras faciais; é o único que decide.
+user processador
+topic read fila/+/contagem
+topic read fila/+/saida
+topic read fila/+/heartbeat
+topic read fila/+/leitura
+topic write fila/+/recomendacao
+topic write fila/+/estado
+topic write fila/+/resultado
+
+# Validador: publica leituras faciais e recebe o resultado e o estado.
+user validador
+topic write fila/+/leitura
+topic read fila/+/resultado
+topic read fila/+/estado
+
+# Observador: somente leitura, sem acesso às leituras faciais.
+user observador
+topic read fila/+/contagem
+topic read fila/+/saida
+topic read fila/+/heartbeat
+topic read fila/+/resultado
+topic read fila/+/estado
+topic read fila/+/recomendacao

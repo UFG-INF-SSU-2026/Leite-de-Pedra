@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+firmware = '../../.local/wokwi-platformio/build/consumidor/firmware.bin'
+elf = '../../.local/wokwi-platformio/build/consumidor/firmware.elf'
+rfc2217ServerPort = 4001
