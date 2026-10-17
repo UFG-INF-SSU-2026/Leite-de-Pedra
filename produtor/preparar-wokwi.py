@@ -8,7 +8,7 @@ raiz = Path(__file__).resolve().parent.parent
 segredos = raiz / ".local" / "mqtt"
 ca = (segredos / "ca.crt").read_text(encoding="ascii")
 for papel, nome in (("produtor", "segredos.h"),
-                    ("sinalizador", "segredos_sinalizador.h")):
+                    ("consumidor", "segredos_consumidor.h")):
     senha = (segredos / f"{papel}.password").read_text(encoding="ascii").strip()
     if not senha:
         raise RuntimeError(f"Senha MQTT vazia para {papel}")

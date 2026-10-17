@@ -109,8 +109,8 @@
       <text x="135" y="58" text-anchor="middle" font-weight="600">ESP32 sensores</text>
       <text x="135" y="80" text-anchor="middle" class="muted" font-size="14">usuário produtor</text>
       <rect class="caixa" x="20" y="148" width="230" height="64" rx="10"/>
-      <text x="135" y="176" text-anchor="middle" font-weight="600">ESP32 sinalizador</text>
-      <text x="135" y="198" text-anchor="middle" class="muted" font-size="14">usuário sinalizador</text>
+      <text x="135" y="176" text-anchor="middle" font-weight="600">ESP32 consumidor</text>
+      <text x="135" y="198" text-anchor="middle" class="muted" font-size="14">usuário consumidor</text>
       <rect class="caixa" x="20" y="266" width="230" height="64" rx="10"/>
       <text x="135" y="294" text-anchor="middle" font-weight="600">Validador (página)</text>
       <text x="135" y="316" text-anchor="middle" class="muted" font-size="14">usuário validador</text>
@@ -208,7 +208,7 @@
 negotiated <span class="k">TLSv1.3</span>
 cipher TLS_<span class="k">AES_256_GCM</span>_SHA384
 
-<span class="c"># ESP32 sinalizador no Wokwi</span>
+<span class="c"># ESP32 consumidor no Wokwi</span>
 negotiated <span class="k">TLSv1.2</span>
 cipher <span class="k">ECDHE</span>-<span class="k">RSA</span>-<span class="k">AES256-GCM</span>-SHA384</pre>
     <div style="overflow-x:auto">
@@ -239,7 +239,7 @@ cipher <span class="k">ECDHE</span>-<span class="k">RSA</span>-<span class="k">A
     </ul>
 <pre><span class="c"># .local/mqtt/mosquitto.passwd (formato)</span>
 produtor:<span class="k">$7$</span>&lt;iterações&gt;$&lt;sal&gt;$&lt;hash&gt;
-sinalizador:<span class="k">$7$</span>...
+consumidor:<span class="k">$7$</span>...
 processador:<span class="k">$7$</span>...
 validador:<span class="k">$7$</span>...
 observador:<span class="k">$7$</span>...
@@ -254,7 +254,7 @@ observador:<span class="k">$7$</span>...
   <div class="duas">
     <ul>
       <li><code>allow_anonymous false</code>: sem usuário e senha, o broker recusa a conexão.</li>
-      <li>São <strong>cinco identidades</strong>: <code>produtor</code>, <code>sinalizador</code>, <code>processador</code>, <code>validador</code> e <code>observador</code>.</li>
+      <li>São <strong>cinco identidades</strong>: <code>produtor</code>, <code>consumidor</code>, <code>processador</code>, <code>validador</code> e <code>observador</code>.</li>
       <li>Cada senha é aleatória (<code>openssl rand -hex 24</code>, 192 bits). No broker fica só o hash gerado pelo <code>mosquitto_passwd</code>.</li>
       <li>Os dois ESP32 têm <strong>senhas diferentes</strong>: se o firmware de um vazar, o outro continua protegido.</li>
     </ul>
@@ -279,7 +279,7 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
     <thead><tr><th>Identidade</th><th>Pode publicar</th><th>Pode ler</th><th>Não pode</th></tr></thead>
     <tbody>
       <tr><td><code>produtor</code></td><td class="pode">contagem, heartbeat</td><td class="pode">recomendação</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
-      <tr><td><code>sinalizador</code></td><td class="nao">nada</td><td class="pode">estado</td><td class="nao">criar chegadas ou saídas</td></tr>
+      <tr><td><code>consumidor</code></td><td class="nao">nada</td><td class="pode">estado</td><td class="nao">criar chegadas ou saídas</td></tr>
       <tr><td><code>validador</code></td><td class="pode">validação</td><td class="pode">estado</td><td class="nao">criar chegadas, emitir recomendação</td></tr>
       <tr><td><code>processador</code></td><td class="pode">recomendação, estado</td><td class="pode">contagem, validação, heartbeat</td><td class="nao">forjar telemetria</td></tr>
       <tr><td><code>observador</code></td><td class="nao">nada</td><td class="pode">fila/#</td><td class="nao">qualquer escrita</td></tr>
@@ -295,8 +295,8 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
   <div class="grid">
     <div class="card"><h3>Pasta isolada</h3><p>Senhas, chaves e certificados ficam em <code>.local/mqtt</code>, com permissão <code>0700</code> na pasta e <code>0600</code> nos arquivos, e o Git ignora a pasta.</p></div>
     <div class="card"><h3>Geração por script</h3><p><code>configurar-seguranca.sh</code> cria a CA, o certificado do broker e as cinco senhas. O script se <strong>recusa a sobrescrever</strong> uma configuração existente.</p></div>
-    <div class="card"><h3>Evolução sem quebrar</h3><p><code>--adicionar-sinalizador</code> e <code>--adicionar-validador</code> incluem um papel novo, e <code>--renovar-certificados</code> troca o certificado, tudo sem mudar as outras senhas.</p></div>
-    <div class="card"><h3>Firmware sem segredo versionado</h3><p><code>preparar-wokwi.py</code> gera <code>segredos.h</code> e <code>segredos_sinalizador.h</code>, cada um só com a senha do seu papel e a CA. Os dois arquivos estão no <code>.gitignore</code>.</p></div>
+    <div class="card"><h3>Evolução sem quebrar</h3><p><code>--adicionar-consumidor</code> e <code>--adicionar-validador</code> incluem um papel novo, e <code>--renovar-certificados</code> troca o certificado, tudo sem mudar as outras senhas.</p></div>
+    <div class="card"><h3>Firmware sem segredo versionado</h3><p><code>preparar-wokwi.py</code> gera <code>segredos.h</code> e <code>segredos_consumidor.h</code>, cada um só com a senha do seu papel e a CA. Os dois arquivos estão no <code>.gitignore</code>.</p></div>
     <div class="card"><h3>Navegador sem credencial</h3><p>A página de validação conversa só com o servidor Python local, e é o servidor que publica no MQTT como <code>validador</code>.</p></div>
   </div>
 </section>
@@ -315,12 +315,12 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
       </ul>
     </div>
     <div>
-      <h3 style="margin-top:0">Servidor de validação e sinalizador</h3>
+      <h3 style="margin-top:0">Servidor de validação e consumidor</h3>
       <ul>
         <li>O HTTP escuta só em <code>127.0.0.1:8000</code>.</li>
         <li>O POST aceita no máximo 1&nbsp;KB, só <code>fila-a</code> ou <code>fila-b</code>, e responde <code>409</code> se a fila estiver vazia.</li>
         <li>O <code>eventId</code> é gerado pelo servidor (<code>uuid4</code>), não pelo navegador.</li>
-        <li>O ESP32 sinalizador só aplica um estado se o tópico e o <code>filaId</code> coincidirem.</li>
+        <li>O ESP32 consumidor só aplica um estado se o tópico e o <code>filaId</code> coincidirem.</li>
       </ul>
     </div>
   </div>
@@ -338,7 +338,7 @@ produtor não recebeu. <span class="k">OK</span>
 New client connected ... u'validador'
 Client ... negotiated <span class="k">TLSv1.3</span>
   cipher TLS_AES_256_GCM_SHA384
-wokwi-sinalizador ... u'sinalizador'
+wokwi-consumidor ... u'consumidor'
 Client ... negotiated <span class="k">TLSv1.2</span>
   cipher ECDHE-RSA-AES256-GCM-SHA384</pre>
     <ul>
@@ -346,7 +346,7 @@ Client ... negotiated <span class="k">TLSv1.2</span>
       <li><strong>Sem usuário:</strong> um cliente anônimo recebe <code>Connection Refused: not authorised</code>.</li>
       <li><strong>Firmware sem a chave:</strong> o ambiente <code>intruso</code> tem a CA, mas uma senha inventada, e o broker o recusa com o retorno 5 (não autorizado). Verificamos que a senha real não está no binário dele.</li>
       <li><strong>Só leitura:</strong> quando o <code>observador</code> tenta publicar uma contagem, o broker descarta a mensagem sem avisar, e ela não chega ao processador.</li>
-      <li><strong>TLS:</strong> o Python negocia TLS 1.3 e o ESP32 sinalizador negocia TLS 1.2 com ECDHE, ambos com AES-256-GCM.</li>
+      <li><strong>TLS:</strong> o Python negocia TLS 1.3 e o ESP32 consumidor negocia TLS 1.2 com ECDHE, ambos com AES-256-GCM.</li>
       <li><strong>Segredos:</strong> <code>git check-ignore</code> confirma que <code>.local/</code> e os arquivos <code>segredos*.h</code> estão fora do controle de versão.</li>
     </ul>
   </div>
@@ -373,7 +373,7 @@ Client ... negotiated <span class="k">TLSv1.2</span>
     <section data-log="observador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
     <section data-log="validador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
     <section data-log="wokwi-sensores"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
-    <section data-log="wokwi-sinalizador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
+    <section data-log="wokwi-consumidor"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
     <section data-log="wokwi-intruso"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
   </div>
 </section>

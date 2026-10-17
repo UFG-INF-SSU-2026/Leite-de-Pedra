@@ -5,7 +5,7 @@ topic write fila/+/heartbeat
 topic read fila/+/recomendacao
 
 # ESP32 de sinalização: recebe o estado, mas não pode criar movimentos.
-user sinalizador
+user consumidor
 topic read fila/+/estado
 
 # Processador: recebe a telemetria e é o único que emite recomendações.

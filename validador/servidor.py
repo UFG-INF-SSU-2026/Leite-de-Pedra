@@ -39,7 +39,7 @@ PORTAS_TERMINAIS = {
 # Portas definidas por rfc2217ServerPort nos wokwi.toml.
 PORTAS_WOKWI = {
     "wokwi-sensores": 4000,
-    "wokwi-sinalizador": 4001,
+    "wokwi-consumidor": 4001,
     "wokwi-intruso": 4005,  # firmware sem a senha, para demonstrar a recusa
 }
 LINHAS = 200

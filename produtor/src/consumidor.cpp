@@ -6,7 +6,7 @@
 #include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <time.h>
-#include "segredos_sinalizador.h"
+#include "segredos_consumidor.h"
 
 // ESP32 de saída: apenas recebe o estado publicado pelo processador Python.
 const char *BROKER = "host.wokwi.internal";
@@ -79,8 +79,8 @@ void receberEstado(String &topico, String &mensagem) {
 void conectarMqtt() {
   if (mqtt.connected() || millis() - ultimaTentativa < 3000) return;
   ultimaTentativa = millis();
-  if (mqtt.connect("wokwi-sinalizador", "sinalizador", MQTT_SENHA)) {
-    Serial.println("MQTT/TLS autenticado como sinalizador");
+  if (mqtt.connect("wokwi-consumidor", "consumidor", MQTT_SENHA)) {
+    Serial.println("MQTT/TLS autenticado como consumidor");
     mqtt.subscribe("fila/+/estado", 1);
     estavaConectado = true;
     atualizarDisplay();

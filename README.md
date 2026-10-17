@@ -11,7 +11,7 @@ empilhar numa fila só.
 
 | Pasta | O que é |
 |---|---|
-| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o sinalizador com LCD e LEDs (`src/sinalizador.cpp`, circuito em `sinalizador/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware, e `simulador.py`, que gera eventos sem o Wokwi. |
+| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware, e `simulador.py`, que gera eventos sem o Wokwi. |
 | [`validador/`](validador/) | Validação de tickets pelo operador. Hoje é uma página local (`index.html`) servida por `servidor.py`; será substituída pela aplicação mobile. |
 | [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
 | [`processador/`](processador/) | Serviço que consome contagens e validações, calcula ocupação, vazão e espera e publica o estado de cada fila. |
@@ -28,7 +28,7 @@ filas em SQLite) e `banco.py` (registro de eventos em JSON).
 ```mermaid
 flowchart LR
     P["<b>ESP32 de entrada</b><br/>dois sensores de proximidade"]
-    S["<b>ESP32 sinalizador</b><br/>LCD e LEDs"]
+    S["<b>ESP32 consumidor</b><br/>LCD e LEDs"]
     V["<b>Validador local</b><br/>tickets pelo navegador"]
     B(("Broker MQTT/TLS<br/>mosquitto :8883"))
     C["<b>Processador</b><br/>ocupação, vazão, espera<br/>classifica o semáforo"]
@@ -46,17 +46,17 @@ flowchart LR
 1. O **ESP32 de entrada** detecta chegadas pelos HC-SR04 e publica contagem e heartbeat.
 2. A **página local** simula a validação do ticket e publica a saída aprovada.
 3. O **processador** mantém o saldo em SQLite, mede a vazão e publica o estado da fila.
-4. O **ESP32 sinalizador** recebe o estado e acende LEDs e LCD; o **observador** acompanha todos os eventos.
+4. O **ESP32 consumidor** recebe o estado e acende LEDs e LCD; o **observador** acompanha todos os eventos.
 
 O Wokwi não executa dois microcontroladores no mesmo projeto. Por isso há
-dois circuitos (`produtor/diagram.json` e `produtor/sinalizador/diagram.json`),
+dois circuitos (`produtor/diagram.json` e `produtor/consumidor/diagram.json`),
 abertos em duas instâncias da simulação. Eles se comunicam pelo broker local,
 não por fios entre as placas.
 
 | Componente | Publica | Assina |
 |---|---|---|
 | `produtor/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/heartbeat` | — |
-| `produtor/src/sinalizador.cpp` (`sinalizador`) | — | `fila/+/estado` |
+| `produtor/src/consumidor.cpp` (`consumidor`) | — | `fila/+/estado` |
 | `validador/servidor.py` (`validador`) | `fila/{id}/validacao` | `fila/+/estado` |
 | `processador/processador.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
 | `observador/observador.py` | — | `fila/#` |
@@ -103,7 +103,7 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 {"filaId": "fila-a", "tipo": "heartbeat", "eventTimeMs": 1758200014000}
 ```
 
-### Recomendação e estado (processador → sinalizador e observador)
+### Recomendação e estado (processador → consumidor e observador)
 
 **`fila/{id}/recomendacao`** — publicada só quando o par (`semaforo`, `sentidoRecomendado`) muda.
 
@@ -128,7 +128,7 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 
 **`fila/{id}/estado`** contém `filaId`, `semaforo`, `ocupacao`,
 `sentidoRecomendado` e `tempoEsperaEstimado`. É publicado com QoS 1 e `retain`
-para que o sinalizador recupere o estado ao reconectar. A ocupação é persistida em
+para que o consumidor recupere o estado ao reconectar. A ocupação é persistida em
 `.local/filas.sqlite3`; o arquivo `eventos.json` é apenas um espelho temporário.
 Antes de haver duas validações, a espera usa 7 s por pessoa; depois passa a
 usar a vazão observada. Assim o semáforo já reage ao crescimento da fila.
@@ -143,7 +143,7 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 | Identidade | Permissões |
 |---|---|
 | `produtor` | publica chegadas/heartbeat; o simulador Python legado também lê recomendações |
-| `sinalizador` | somente lê o estado das filas |
+| `consumidor` | somente lê o estado das filas |
 | `processador` | lê telemetria e publica recomendações |
 | `observador` | somente lê `fila/#` |
 | `validador` | publica validações e lê o estado das filas |
@@ -173,7 +173,7 @@ O script se recusa a sobrescrever uma configuração existente. Os arquivos de
 senha individuais são lidos diretamente pelos clientes e têm permissão `0600`.
 Os clientes usam a API de callbacks da versão 2 do Paho MQTT.
 Se você já tinha a configuração anterior, execute
-`./broker/configurar-seguranca.sh --adicionar-sinalizador` uma vez. Se ela
+`./broker/configurar-seguranca.sh --adicionar-consumidor` uma vez. Se ela
 ainda não tinha o usuário `validador`, execute também
 `./broker/configurar-seguranca.sh --adicionar-validador`. Depois rode
 `python3 produtor/preparar-wokwi.py` e reinicie o broker. Não é necessário
@@ -194,11 +194,11 @@ python3 -u validador/servidor.py 2>&1 | tee .local/logs/validador.log           
 Abra `http://localhost:8000` no navegador. Abaixo das filas, a página mostra
 as últimas linhas de cada terminal (lidas de `.local/logs/`) e a serial de
 cada ESP32: o Wokwi expõe a serial dos sensores na porta 4000 e a do
-sinalizador na 4001 (`rfc2217ServerPort` nos `wokwi.toml`). Compile **ambos** os firmwares na
+consumidor na 4001 (`rfc2217ServerPort` nos `wokwi.toml`). Compile **ambos** os firmwares na
 pasta `produtor/` com `pio run` (ou PlatformIO: Build). Em uma janela do VS Code,
 selecione `produtor/wokwi.toml` em `F1 → Wokwi: Select Config File` e inicie o
 simulador: essa janela contém apenas os sensores. Em outra janela/instância do
-VS Code, selecione `produtor/sinalizador/wokwi.toml` e inicie a segunda simulação,
+VS Code, selecione `produtor/consumidor/wokwi.toml` e inicie a segunda simulação,
 com o LCD e os LEDs. A simulação em VS Code precisa do gateway local do Wokwi para alcançar o broker
 em `host.wokwi.internal:8883` (consulte a disponibilidade dessa função na sua
 licença). Cada firmware usa um cabeçalho local próprio, gerado em

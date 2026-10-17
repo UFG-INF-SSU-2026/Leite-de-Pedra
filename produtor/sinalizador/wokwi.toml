@@ -1,5 +1,0 @@
-[wokwi]
-version = 1
-firmware = '../../.local/wokwi-platformio/build/sinalizador/firmware.bin'
-elf = '../../.local/wokwi-platformio/build/sinalizador/firmware.elf'
-rfc2217ServerPort = 4001
