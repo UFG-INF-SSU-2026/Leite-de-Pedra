@@ -2,7 +2,6 @@
 
 import json
 import socket
-import sqlite3
 import subprocess
 import sys
 import threading
@@ -16,7 +15,6 @@ import paho.mqtt.client as mqtt
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
-from estado_filas import CAMINHO_PADRAO
 from mqtt_config import conectar
 
 
@@ -153,23 +151,9 @@ cliente.on_connect = ao_conectar
 cliente.on_message = ao_receber
 
 
-def ocupacao(fila):
-    if not CAMINHO_PADRAO.exists():
-        return 0
-    with sqlite3.connect(CAMINHO_PADRAO) as conexao:
-        linha = conexao.execute(
-            "SELECT entradas - saidas FROM filas WHERE fila_id = ?", (fila,)
-        ).fetchone()
-    return linha[0] if linha else 0
-
-
 def resumo_fila(fila, estados_recebidos, resultados_recebidos):
-    saldo = ocupacao(fila)
     estado = estados_recebidos.get(fila)
-    # Retain do broker pode ter sido publicado com outro banco de demonstração.
-    if estado and estado.get("ocupacao") != saldo:
-        estado = None
-    return {"ocupacao": saldo, "estado": estado,
+    return {"ocupacao": estado["ocupacao"] if estado else None, "estado": estado,
             "ultimoResultado": resultados_recebidos.get(fila)}
 
 

@@ -73,7 +73,7 @@
           const fila = card.dataset.fila;
           const dado = dados[fila];
           const estado = dado.estado;
-          card.querySelector('.numero').textContent = dado.ocupacao;
+          card.querySelector('.numero').textContent = dado.ocupacao ?? '–';
           const lamp = card.querySelector('.lamp');
           lamp.className = 'lamp ' + (estado?.semaforo || '');
           card.querySelector('.meta').textContent = estado
