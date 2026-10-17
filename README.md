@@ -21,6 +21,8 @@ ela foi aceita.
 | [`tests/`](tests/) | Testes automatizados (`python3 -m unittest discover -s tests`). |
 | [`entregas/`](entregas/) | Entregas da disciplina; ver [Entregas](#entregas). |
 
+O fluxo completo, com diagramas, está em [`ARQUITETURA.md`](docs/ARQUITETURA.md).
+
 Na raiz ficam os módulos Python compartilhados: `mqtt_config.py` (conexão
 TLS autenticada usada por todos os clientes) e `estado_filas.py` (saldo das
 filas em SQLite).
