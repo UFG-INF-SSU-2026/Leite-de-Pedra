@@ -41,7 +41,7 @@
   <main>
     <div class="eyebrow">Leite de Pedra · demonstração local</div>
     <h1>Validação de tickets</h1>
-    <p>Abra esta página em <a href="http://localhost:8000" style="color:#9dd0ff">http://localhost:8000</a> com <code>python3 -u validacao/servidor.py</code> em execução. Abrir o HTML diretamente não conecta à API.</p>
+    <p>Abra esta página em <a href="http://localhost:8000" style="color:#9dd0ff">http://localhost:8000</a> com <code>python3 -u validador/servidor.py</code> em execução. Abrir o HTML diretamente não conecta à API.</p>
     <p>Aproxime uma pessoa de um sensor no Wokwi para registrar a chegada. Depois valide o ticket aqui para registrar a passagem. O processador calcula a ocupação e o estado dos LEDs.</p>
     <div class="grid">
       <article data-fila="fila-a"><div class="top"><h2>Fila A</h2><span class="lamp" aria-label="Estado da fila A"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila A</button><p class="meta">Aguardando dados...</p></article>
@@ -55,7 +55,7 @@
     const aviso = document.querySelector('#aviso');
     const nomes = {livre: 'Verde', atencao: 'Amarelo', bloqueada: 'Vermelho'};
     if (location.protocol === 'file:') {
-      aviso.textContent = 'Abra http://localhost:8000 após iniciar python3 -u validacao/servidor.py na raiz do projeto.';
+      aviso.textContent = 'Abra http://localhost:8000 após iniciar python3 -u validador/servidor.py na raiz do projeto.';
       document.querySelectorAll('button').forEach(botao => botao.disabled = true);
     }
     async function atualizar() {
@@ -78,7 +78,7 @@
         }
         aviso.textContent = '';
       } catch {
-        aviso.textContent = 'Não foi possível consultar o servidor local. Inicie python3 -u validacao/servidor.py e abra http://localhost:8000.';
+        aviso.textContent = 'Não foi possível consultar o servidor local. Inicie python3 -u validador/servidor.py e abra http://localhost:8000.';
       }
     }
     for (const card of document.querySelectorAll('article[data-fila]')) {

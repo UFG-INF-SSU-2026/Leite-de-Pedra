@@ -12,7 +12,7 @@ for papel, nome in (("produtor", "segredos.h"),
     senha = (segredos / f"{papel}.password").read_text(encoding="ascii").strip()
     if not senha:
         raise RuntimeError(f"Senha MQTT vazia para {papel}")
-    destino = raiz / "wokwi" / "include" / nome
+    destino = raiz / "produtor" / "include" / nome
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(
         "#pragma once\n"

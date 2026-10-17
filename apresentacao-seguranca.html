@@ -144,11 +144,11 @@
       <li>Todo cliente <strong>verifica</strong> o certificado: o Python usa <code>ssl.create_default_context(cafile=ca.crt)</code> e o ESP32 usa <code>tls.setCACert(MQTT_CA)</code>.</li>
       <li>O broker escuta apenas em <code>127.0.0.1</code>: ninguém da rede local consegue se conectar a ele.</li>
     </ul>
-<pre><span class="c"># mosquitto.conf</span>
+<pre><span class="c"># broker/mosquitto.conf</span>
 <span class="k">listener</span> 8883 127.0.0.1
 <span class="k">allow_anonymous</span> false
 <span class="k">password_file</span> .local/mqtt/mosquitto.passwd
-<span class="k">acl_file</span> mosquitto.acl
+<span class="k">acl_file</span> broker/mosquitto.acl
 <span class="k">certfile</span> .local/mqtt/broker.crt
 <span class="k">keyfile</span>  .local/mqtt/broker.key
 <span class="k">tls_version</span> tlsv1.2</pre>
@@ -330,7 +330,7 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
   <div class="eyebrow">Evidências</div>
   <h2>Como verificamos</h2>
   <div class="duas">
-<pre><span class="c">$ python3 scripts/testar-acl.py</span>
+<pre><span class="c">$ python3 broker/testar-acl.py</span>
 ACL de leitura: processador recebeu;
 produtor não recebeu. <span class="k">OK</span>
 
@@ -355,18 +355,18 @@ Client ... negotiated <span class="k">TLSv1.2</span>
 <section class="slide">
   <div class="eyebrow">Ao vivo · Firmware sem a chave</div>
   <h2>O intruso tentando entrar</h2>
-  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validacao/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
+  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validador/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
   <div class="vivo dois">
     <section data-log="wokwi-intruso" data-titulo="Serial do ESP32 intruso"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
     <section data-log="broker" data-filtro="intruso|not authori" data-titulo="Broker · somente recusas"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
   </div>
-  <p class="lead" style="margin-top:14px">Inicie <code>wokwi/intruso/wokwi.toml</code> no VS Code: cada tentativa aparece nos dois lados, e nenhuma contagem chega ao processador.</p>
+  <p class="lead" style="margin-top:14px">Inicie <code>produtor/intruso/wokwi.toml</code> no VS Code: cada tentativa aparece nos dois lados, e nenhuma contagem chega ao processador.</p>
 </section>
 
 <section class="slide">
   <div class="eyebrow">Ao vivo · Sistema completo</div>
   <h2>Todos os terminais</h2>
-  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validacao/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
+  <p class="vivo-aviso" hidden>Abra em <code>http://localhost:8000/apresentacao</code>, com <code>validador/servidor.py</code> rodando, para ver os terminais ao vivo.</p>
   <div class="vivo">
     <section data-log="broker"><h3><span></span><span class="sit"></span></h3><pre></pre></section>
     <section data-log="processador"><h3><span></span><span class="sit"></span></h3><pre></pre></section>

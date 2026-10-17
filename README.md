@@ -33,20 +33,20 @@ flowchart LR
 4. O **ESP32 sinalizador** recebe o estado e acende LEDs e LCD; o **observador** acompanha todos os eventos.
 
 O Wokwi não executa dois microcontroladores no mesmo projeto. Por isso há
-dois circuitos (`wokwi/diagram.json` e `wokwi/sinalizador/diagram.json`),
+dois circuitos (`produtor/diagram.json` e `produtor/sinalizador/diagram.json`),
 abertos em duas instâncias da simulação. Eles se comunicam pelo broker local,
 não por fios entre as placas.
 
 | Componente | Publica | Assina |
 |---|---|---|
-| `wokwi/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/heartbeat` | — |
-| `wokwi/src/sinalizador.cpp` (`sinalizador`) | — | `fila/+/estado` |
-| `validacao/servidor.py` (`validador`) | `fila/{id}/validacao` | `fila/+/estado` |
+| `produtor/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/heartbeat` | — |
+| `produtor/src/sinalizador.cpp` (`sinalizador`) | — | `fila/+/estado` |
+| `validador/servidor.py` (`validador`) | `fila/{id}/validacao` | `fila/+/estado` |
 | `processador/processador.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
 | `observador/observador.py` | — | `fila/#` |
 
 Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`. O antigo
-`produtor/produtor.py` permanece como simulador alternativo sem Wokwi.
+`produtor/simulador.py` permanece como simulador alternativo sem Wokwi.
 
 ## Payloads
 
@@ -149,18 +149,18 @@ Gere a CA, o certificado de `localhost`/`host.wokwi.internal` e as cinco
 credenciais aleatórias, depois prepare um cabeçalho local para cada ESP32:
 
 ```
-./scripts/configurar-seguranca.sh
-python3 scripts/preparar-wokwi.py
+./broker/configurar-seguranca.sh
+python3 produtor/preparar-wokwi.py
 ```
 
 O script se recusa a sobrescrever uma configuração existente. Os arquivos de
 senha individuais são lidos diretamente pelos clientes e têm permissão `0600`.
 Os clientes usam a API de callbacks da versão 2 do Paho MQTT.
 Se você já tinha a configuração anterior, execute
-`./scripts/configurar-seguranca.sh --adicionar-sinalizador` uma vez. Se ela
+`./broker/configurar-seguranca.sh --adicionar-sinalizador` uma vez. Se ela
 ainda não tinha o usuário `validador`, execute também
-`./scripts/configurar-seguranca.sh --adicionar-validador`. Depois rode
-`python3 scripts/preparar-wokwi.py` e reinicie o broker. Não é necessário
+`./broker/configurar-seguranca.sh --adicionar-validador`. Depois rode
+`python3 produtor/preparar-wokwi.py` e reinicie o broker. Não é necessário
 renovar o certificado para adicionar apenas esse usuário.
 
 ### Execução
@@ -169,24 +169,24 @@ Para a demonstração integrada, use quatro terminais na raiz do projeto:
 
 ```
 mkdir -p .local/logs
-./scripts/iniciar-broker.sh 2>&1 | tee .local/logs/broker.log                    # terminal 1
+./broker/iniciar-broker.sh 2>&1 | tee .local/logs/broker.log                    # terminal 1
 python3 -u processador/processador.py 2>&1 | tee .local/logs/processador.log        # terminal 2
 python3 -u observador/observador.py 2>&1 | tee .local/logs/observador.log        # terminal 3
-python3 -u validacao/servidor.py 2>&1 | tee .local/logs/validador.log            # terminal 4
+python3 -u validador/servidor.py 2>&1 | tee .local/logs/validador.log            # terminal 4
 ```
 
 Abra `http://localhost:8000` no navegador. Abaixo das filas, a página mostra
 as últimas linhas de cada terminal (lidas de `.local/logs/`) e a serial de
 cada ESP32: o Wokwi expõe a serial dos sensores na porta 4000 e a do
 sinalizador na 4001 (`rfc2217ServerPort` nos `wokwi.toml`). Compile **ambos** os firmwares na
-pasta `wokwi/` com `pio run` (ou PlatformIO: Build). Em uma janela do VS Code,
-selecione `wokwi/wokwi.toml` em `F1 → Wokwi: Select Config File` e inicie o
+pasta `produtor/` com `pio run` (ou PlatformIO: Build). Em uma janela do VS Code,
+selecione `produtor/wokwi.toml` em `F1 → Wokwi: Select Config File` e inicie o
 simulador: essa janela contém apenas os sensores. Em outra janela/instância do
-VS Code, selecione `wokwi/sinalizador/wokwi.toml` e inicie a segunda simulação,
+VS Code, selecione `produtor/sinalizador/wokwi.toml` e inicie a segunda simulação,
 com o LCD e os LEDs. A simulação em VS Code precisa do gateway local do Wokwi para alcançar o broker
 em `host.wokwi.internal:8883` (consulte a disponibilidade dessa função na sua
 licença). Cada firmware usa um cabeçalho local próprio, gerado em
-`wokwi/include/` e ignorado pelo Git, com apenas a senha do seu papel MQTT.
+`produtor/include/` e ignorado pelo Git, com apenas a senha do seu papel MQTT.
 
 No Wokwi, clique em cada HC-SR04 para alterar a distância. Faça o ciclo
 **400 cm → 40 cm → 400 cm** para representar a passagem de uma pessoa pela
@@ -194,7 +194,7 @@ entrada; só a transição para perto conta. Repita na fila A até haver três
 pessoas: com a estimativa inicial de 7 s por pessoa, ela fica amarela. Cinco
 pessoas a deixam vermelha. Na página, valide um ticket da fila A para registrar
 uma saída; a contagem cai uma unidade. O LCD e os LEDs da segunda simulação
-seguem o estado enviado pelo processador. **Não execute `produtor/produtor.py` junto com o Wokwi**:
+seguem o estado enviado pelo processador. **Não execute `produtor/simulador.py` junto com o Wokwi**:
 ele é um simulador alternativo e geraria eventos adicionais.
 
 O SQLite em `.local/filas.sqlite3` preserva a ocupação ao reiniciar o
@@ -205,7 +205,7 @@ Por padrão, o broker aceita apenas conexões da própria máquina. Para usar ou
 host, configure `MQTT_HOST`, `MQTT_PORT`, `MQTT_CA`, `MQTT_USERNAME` e
 `MQTT_PASSWORD` (ou `MQTT_PASSWORD_FILE`) no ambiente. Nesse caso, emita um
 certificado que contenha o nome DNS/IP do servidor e altere o endereço do
-`listener` em `mosquitto.conf`; não desative a validação TLS.
+`listener` em `broker/mosquitto.conf`; não desative a validação TLS.
 
 ### Verificação da autorização
 
@@ -225,7 +225,7 @@ trânsito; os arquivos `eventos.json` não são criptografados em repouso.
 
 Para ver um **firmware sem a senha** tentando entrar, compile o ambiente
 `intruso` (`pio run` já o inclui) e inicie a simulação de
-`wokwi/intruso/wokwi.toml`. Ele usa o mesmo circuito dos sensores e a CA
+`produtor/intruso/wokwi.toml`. Ele usa o mesmo circuito dos sensores e a CA
 (que é pública), mas uma senha inventada para o usuário `produtor`. O serial
 mostra `Falha MQTT: ... (retorno 5)` a cada 3 s, e o log do broker registra
 `wokwi-intruso ... disconnected: not authorised`. Nenhuma contagem chega ao
@@ -234,11 +234,11 @@ processador.
 Para testar também a restrição de leitura com o broker em execução:
 
 ```
-python3 scripts/testar-acl.py
+python3 broker/testar-acl.py
 ```
 
 Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas com
-`./scripts/configurar-seguranca.sh --renovar-certificados` e reinicie o broker.
+`./broker/configurar-seguranca.sh --renovar-certificados` e reinicie o broker.
 
 ## Marcos anteriores
 

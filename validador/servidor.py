@@ -24,7 +24,7 @@ PASTA_LOGS = RAIZ / ".local" / "logs"
 # Um log sem linhas novas não prova que o processo parou (broker ocioso não
 # escreve nada); por isso o painel consulta o processo pelo comando.
 TERMINAIS = {
-    "broker": "mosquitto -c mosquitto.conf",
+    "broker": "mosquitto -c broker/mosquitto.conf",
     "processador": "processador/processador.py",
     "observador": "observador/observador.py",
     "validador": None,  # é este próprio processo

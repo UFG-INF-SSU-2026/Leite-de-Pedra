@@ -13,10 +13,10 @@ else
 fi
 
 if [[ ! -f "$RAIZ_PROJETO/.local/mqtt/mosquitto.passwd" ]]; then
-    echo "Segurança ainda não configurada. Execute scripts/configurar-seguranca.sh." >&2
+    echo "Segurança ainda não configurada. Execute broker/configurar-seguranca.sh." >&2
     exit 1
 fi
 
 cd "$RAIZ_PROJETO"
-chmod 600 mosquitto.acl
-exec "$EXECUTAVEL_MOSQUITTO" -c mosquitto.conf
+chmod 600 broker/mosquitto.acl
+exec "$EXECUTAVEL_MOSQUITTO" -c broker/mosquitto.conf

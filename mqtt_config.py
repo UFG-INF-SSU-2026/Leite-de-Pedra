@@ -26,7 +26,7 @@ def _senha_de(papel):
     except FileNotFoundError as erro:
         raise RuntimeError(
             f"Credencial MQTT não encontrada em {arquivo}. "
-            "Execute scripts/configurar-seguranca.sh primeiro."
+            "Execute broker/configurar-seguranca.sh primeiro."
         ) from erro
     if not senha:
         raise RuntimeError(f"A credencial MQTT em {arquivo} está vazia")
@@ -43,7 +43,7 @@ def conectar(client, papel, assincrono=False):
     if not ca.is_file():
         raise RuntimeError(
             f"CA MQTT não encontrada em {ca}. "
-            "Execute scripts/configurar-seguranca.sh primeiro."
+            "Execute broker/configurar-seguranca.sh primeiro."
         )
 
     contexto_tls = ssl.create_default_context(cafile=str(ca))
