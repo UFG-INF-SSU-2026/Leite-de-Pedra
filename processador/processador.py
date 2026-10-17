@@ -8,9 +8,8 @@ import statistics
 import sys
 from pathlib import Path
 
-# O banco é um só, na raiz, e serve aos três componentes.
+# Os módulos compartilhados ficam na raiz.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from banco import BancoEmMemoria
 from estado_filas import EstadoFilas
 from mqtt_config import conectar
 
@@ -57,7 +56,6 @@ CORES = {
 
 INTERVALO_PAINEL = 2
 
-banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
 estado_persistente = EstadoFilas()
 entradas = {}
 saidas = {}
@@ -103,12 +101,10 @@ def on_message(client, userdata, msg):
         novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, tipo, payload)
         if not novo:
             return
-        banco.inserir(msg.topic, payload)
         if tipo == "validacao" and saidas[fila] > saidas_antes:
             instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
     elif tipo == "heartbeat":
-        banco.inserir(msg.topic, payload)
         # Não entra na contabilidade: só prova que o enlace está vivo quando
         # não há movimento na fila. Sem ele o processador se declararia sem
         # dados em qualquer período calmo, com o enlace perfeito.

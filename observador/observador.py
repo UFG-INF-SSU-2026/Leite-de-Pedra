@@ -4,19 +4,16 @@ from datetime import datetime, timedelta
 import sys
 from pathlib import Path
 
-# O banco é um só, na raiz, e serve aos três componentes.
+# Os módulos compartilhados ficam na raiz.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from banco import BancoEmMemoria
 from mqtt_config import conectar
 
 TOPICO_TODAS_FILAS = "fila/#"
 
-banco = BancoEmMemoria(Path(__file__).resolve().parent / "eventos.json")
 ultimo_heartbeat = {}
 
 def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
-    banco.inserir(msg.topic, payload)
     fila = payload["filaId"]
 
     tipo_evento = payload.get("tipo", msg.topic.rsplit("/", 1)[-1])

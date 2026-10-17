@@ -278,7 +278,7 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
   <table>
     <thead><tr><th>Identidade</th><th>Pode publicar</th><th>Pode ler</th><th>Não pode</th></tr></thead>
     <tbody>
-      <tr><td><code>produtor</code></td><td class="pode">contagem, heartbeat</td><td class="pode">recomendação</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
+      <tr><td><code>produtor</code></td><td class="pode">contagem, heartbeat</td><td class="nao">nada</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
       <tr><td><code>consumidor</code></td><td class="nao">nada</td><td class="pode">estado</td><td class="nao">criar chegadas ou saídas</td></tr>
       <tr><td><code>validador</code></td><td class="pode">validação</td><td class="pode">estado</td><td class="nao">criar chegadas, emitir recomendação</td></tr>
       <tr><td><code>processador</code></td><td class="pode">recomendação, estado</td><td class="pode">contagem, validação, heartbeat</td><td class="nao">forjar telemetria</td></tr>
@@ -384,7 +384,7 @@ Client ... negotiated <span class="k">TLSv1.2</span>
   <div class="grid">
     <div class="card alerta"><h3>CA de desenvolvimento</h3><p>A CA é autoassinada e só faz sentido na demonstração. Em produção, o certificado precisa vir de uma CA gerenciada, com renovação automática.</p></div>
     <div class="card alerta"><h3>Senha dentro do firmware</h3><p>Quem tiver acesso físico ao ESP32 consegue ler a flash. A evolução é usar a criptografia de flash do ESP32 ou certificado de cliente (mTLS).</p></div>
-    <div class="card alerta"><h3>Dados em repouso</h3><p>O SQLite e o <code>eventos.json</code> não são cifrados; o TLS protege só o trânsito.</p></div>
+    <div class="card alerta"><h3>Dados em repouso</h3><p>O SQLite não é cifrado; o TLS protege só o trânsito.</p></div>
     <div class="card alerta"><h3>Payload malformado</h3><p>O processador não trata JSON inválido vindo de um cliente autenticado. A ACL limita quem pode publicar, mas falta um <code>try</code> no parser.</p></div>
     <div class="card alerta"><h3>Broker apenas local</h3><p>Para levar o broker a outro host, é preciso emitir um certificado com o novo nome e abrir o listener, sem nunca desligar a verificação TLS.</p></div>
   </div>

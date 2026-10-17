@@ -11,7 +11,7 @@ empilhar numa fila só.
 
 | Pasta | O que é |
 |---|---|
-| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware, e `simulador.py`, que gera eventos sem o Wokwi. |
+| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware. |
 | [`validador/`](validador/) | Validação de tickets pelo operador. Hoje é uma página local (`index.html`) servida por `servidor.py`; será substituída pela aplicação mobile. |
 | [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
 | [`processador/`](processador/) | Serviço que consome contagens e validações, calcula ocupação, vazão e espera e publica o estado de cada fila. |
@@ -20,8 +20,8 @@ empilhar numa fila só.
 | [`entregas/`](entregas/) | Entregas da disciplina; ver [Entregas](#entregas). |
 
 Na raiz ficam os módulos Python compartilhados: `mqtt_config.py` (conexão
-TLS autenticada usada por todos os clientes), `estado_filas.py` (saldo das
-filas em SQLite) e `banco.py` (registro de eventos em JSON).
+TLS autenticada usada por todos os clientes) e `estado_filas.py` (saldo das
+filas em SQLite).
 
 ## Fluxo
 
@@ -61,8 +61,7 @@ não por fios entre as placas.
 | `processador/processador.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
 | `observador/observador.py` | — | `fila/#` |
 
-Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`. O antigo
-`produtor/simulador.py` permanece como simulador alternativo sem Wokwi.
+Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`.
 
 ## Payloads
 
@@ -129,7 +128,7 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 **`fila/{id}/estado`** contém `filaId`, `semaforo`, `ocupacao`,
 `sentidoRecomendado` e `tempoEsperaEstimado`. É publicado com QoS 1 e `retain`
 para que o consumidor recupere o estado ao reconectar. A ocupação é persistida em
-`.local/filas.sqlite3`; o arquivo `eventos.json` é apenas um espelho temporário.
+`.local/filas.sqlite3`.
 Antes de haver duas validações, a espera usa 7 s por pessoa; depois passa a
 usar a vazão observada. Assim o semáforo já reage ao crescimento da fila.
 
@@ -142,7 +141,7 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 
 | Identidade | Permissões |
 |---|---|
-| `produtor` | publica chegadas/heartbeat; o simulador Python legado também lê recomendações |
+| `produtor` | publica chegadas/heartbeat |
 | `consumidor` | somente lê o estado das filas |
 | `processador` | lê telemetria e publica recomendações |
 | `observador` | somente lê `fila/#` |
@@ -210,8 +209,7 @@ entrada; só a transição para perto conta. Repita na fila A até haver três
 pessoas: com a estimativa inicial de 7 s por pessoa, ela fica amarela. Cinco
 pessoas a deixam vermelha. Na página, valide um ticket da fila A para registrar
 uma saída; a contagem cai uma unidade. O LCD e os LEDs da segunda simulação
-seguem o estado enviado pelo processador. **Não execute `produtor/simulador.py` junto com o Wokwi**:
-ele é um simulador alternativo e geraria eventos adicionais.
+seguem o estado enviado pelo processador.
 
 O SQLite em `.local/filas.sqlite3` preserva a ocupação ao reiniciar o
 processador. Para iniciar outro evento real, arquive ou zere esse banco de forma
@@ -237,7 +235,7 @@ mosquitto_sub -h localhost -p 8883 \
 
 Esse mesmo usuário não consegue publicar, e um cliente anônimo não consegue se
 conectar. As negativas aparecem no log do broker. TLS protege os dados em
-trânsito; os arquivos `eventos.json` não são criptografados em repouso.
+trânsito; o SQLite em `.local/` não é criptografado em repouso.
 
 Para ver um **firmware sem a senha** tentando entrar, compile o ambiente
 `intruso` (`pio run` já o inclui) e inicie a simulação de

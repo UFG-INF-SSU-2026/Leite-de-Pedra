@@ -1,8 +1,7 @@
-# Produtor: envia somente telemetria e recebe a decisão do processador.
+# Produtor: envia somente telemetria.
 user produtor
 topic write fila/+/contagem
 topic write fila/+/heartbeat
-topic read fila/+/recomendacao
 
 # ESP32 de sinalização: recebe o estado, mas não pode criar movimentos.
 user consumidor

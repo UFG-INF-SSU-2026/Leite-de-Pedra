@@ -9,7 +9,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import banco
 import estado_filas
 import mqtt_config
 
@@ -25,13 +24,10 @@ class ClienteFalso:
 
 class HeartbeatTest(unittest.TestCase):
     def test_horario_antigo_do_esp_nao_bloqueia_estado(self):
-        banco_original = banco.BancoEmMemoria
         estado_original = estado_filas.EstadoFilas
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "filas.sqlite3"
-            with patch.object(banco, "BancoEmMemoria",
-                              side_effect=lambda _: banco_original()), \
-                 patch.object(estado_filas, "EstadoFilas",
+            with patch.object(estado_filas, "EstadoFilas",
                               side_effect=lambda: estado_original(arquivo)), \
                  patch.object(mqtt_config, "conectar"), \
                  patch("threading.Thread.start"), \
