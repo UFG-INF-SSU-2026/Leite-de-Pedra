@@ -57,6 +57,29 @@ class HeartbeatTest(unittest.TestCase):
             self.assertTrue(modulo["heartbeat_recente"](
                 "fila-a", time.monotonic()))
 
+            # A saída vem do sensor; a leitura facial só decide o resultado.
+            entregar("saida", "saida-1")
+            self.assertEqual(modulo["ocupacao_de"]("fila-a"), 0)
+
+            for foto, esperado in (("demo/rosto-cadastrado.jpg", "aceito"),
+                                   ("demo/outro.jpg", "recusado")):
+                leitura = {"eventId": f"leitura-{esperado}", "filaId": "fila-a",
+                           "tipo": "leitura", "fotoRef": foto,
+                           "eventTimeMs": horario_antigo}
+                modulo["on_message"](cliente, None, SimpleNamespace(
+                    topic="fila/fila-a/leitura",
+                    payload=json.dumps(leitura).encode()))
+                modulo["avaliar_leitura"](cliente, modulo["leituras"].get_nowait())
+                topico, resultado, _ = cliente.publicacoes[-1]
+                self.assertEqual(topico, "fila/fila-a/resultado")
+                self.assertEqual(resultado["resultado"], esperado)
+                self.assertEqual(resultado["eventId"], leitura["eventId"])
+            self.assertEqual(modulo["ocupacao_de"]("fila-a"), 0)
+
+            # Payload que não é JSON é descartado em vez de derrubar o processador.
+            modulo["on_message"](cliente, None, SimpleNamespace(
+                topic="fila/fila-a/heartbeat", payload=b"teste-acl"))
+
             modulo["ultimo_heartbeat_recebido"]["fila-a"] = time.monotonic() - 16
             self.assertFalse(modulo["heartbeat_recente"](
                 "fila-a", time.monotonic()))

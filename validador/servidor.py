@@ -1,4 +1,4 @@
-"""Interface local de validação de tickets, sem credenciais MQTT no navegador."""
+"""Interface local do validador: envia leituras faciais e mostra o resultado, sem credenciais MQTT no navegador."""
 
 import json
 import socket
@@ -50,6 +50,7 @@ PAGINAS = {
 }
 
 estados = {}
+resultados = {}
 seriais = {nome: deque(maxlen=LINHAS) for nome in PORTAS_WOKWI}
 serial_conectada = {nome: False for nome in PORTAS_WOKWI}
 serial_atualizada = {nome: None for nome in PORTAS_WOKWI}
@@ -60,6 +61,7 @@ cliente = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 def ao_conectar(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
         client.subscribe("fila/+/estado", qos=1)
+        client.subscribe("fila/+/resultado", qos=1)
         print("Validador conectado ao broker MQTT/TLS")
     else:
         print(f"Falha na autenticação MQTT: {reason_code}")
@@ -74,7 +76,10 @@ def ao_receber(client, userdata, mensagem):
     if fila not in {"fila-a", "fila-b"}:
         return
     with trava_estados:
-        estados[fila] = payload
+        if mensagem.topic.endswith("/resultado"):
+            resultados[fila] = payload
+        else:
+            estados[fila] = payload
 
 
 def sem_telnet(dados):
@@ -158,13 +163,14 @@ def ocupacao(fila):
     return linha[0] if linha else 0
 
 
-def resumo_fila(fila, estados_recebidos):
+def resumo_fila(fila, estados_recebidos, resultados_recebidos):
     saldo = ocupacao(fila)
     estado = estados_recebidos.get(fila)
     # Retain do broker pode ter sido publicado com outro banco de demonstração.
     if estado and estado.get("ocupacao") != saldo:
         estado = None
-    return {"ocupacao": saldo, "estado": estado}
+    return {"ocupacao": saldo, "estado": estado,
+            "ultimoResultado": resultados_recebidos.get(fila)}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -188,8 +194,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/filas":
             with trava_estados:
                 copia = dict(estados)
+                copia_resultados = dict(resultados)
             self.responder_json(200, {
-                fila: resumo_fila(fila, copia)
+                fila: resumo_fila(fila, copia, copia_resultados)
                 for fila in ("fila-a", "fila-b")
             })
         elif self.path == "/api/logs":
@@ -208,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
             self.responder_json(404, {"erro": "Não encontrado"})
 
     def do_POST(self):
-        if self.path != "/api/validacoes":
+        if self.path != "/api/leituras":
             self.responder_json(404, {"erro": "Não encontrado"})
             return
         try:
@@ -217,37 +224,40 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Tamanho inválido")
             dados = json.loads(self.rfile.read(tamanho))
             fila = dados["filaId"]
+            foto = dados["fotoRef"]
             if fila not in {"fila-a", "fila-b"}:
                 raise ValueError("Fila inválida")
+            if not isinstance(foto, str) or not 0 < len(foto) <= 256:
+                raise ValueError("Foto inválida")
         except (ValueError, KeyError, TypeError):
-            self.responder_json(400, {"erro": "Informe fila-a ou fila-b"})
+            self.responder_json(400, {"erro": "Informe fila-a ou fila-b e a referência da foto"})
             return
 
-        if ocupacao(fila) == 0:
-            self.responder_json(409, {"erro": "Não há pessoa aguardando nessa fila"})
-            return
         if not cliente.is_connected():
             self.responder_json(503, {"erro": "Broker MQTT indisponível"})
             return
 
+        # Só a referência da foto passa pelo broker; a imagem fica no bucket
+        # e não chega a quem assina os tópicos.
         payload = {
             "eventId": uuid.uuid4().hex,
             "filaId": fila,
-            "tipo": "validacao",
-            "resultado": "aprovado",
+            "tipo": "leitura",
+            "fotoRef": foto,
             "eventTimeMs": int(time.time() * 1000),
         }
         publicacao = cliente.publish(
-            f"fila/{fila}/validacao", json.dumps(payload), qos=1
+            f"fila/{fila}/leitura", json.dumps(payload), qos=1
         )
         try:
             publicacao.wait_for_publish(timeout=3)
         except RuntimeError:
             pass
         if publicacao.rc != mqtt.MQTT_ERR_SUCCESS or not publicacao.is_published():
-            self.responder_json(503, {"erro": "Falha ao enviar validação"})
+            self.responder_json(503, {"erro": "Falha ao enviar a leitura"})
             return
-        self.responder_json(202, {"mensagem": f"Ticket validado na {fila}"})
+        self.responder_json(202, {"mensagem": f"Leitura enviada na {fila}; aguardando o processador",
+                                  "eventId": payload["eventId"]})
 
 
 if __name__ == "__main__":

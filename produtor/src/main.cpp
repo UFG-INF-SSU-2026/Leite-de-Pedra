@@ -15,24 +15,28 @@ const char *SENHA = MQTT_SENHA;
 const char *ID_CLIENTE = "wokwi-sensores";
 #endif
 
-// ESP32 de entrada: somente detecta chegadas e publica telemetria.
-// A passagem validada é publicada pelo aplicativo no navegador.
+// ESP32 das filas: cada fila tem um sensor na entrada e outro na saída.
+// Ele só publica movimentos; quem calcula ocupação e espera é o processador.
 const char *BROKER = "host.wokwi.internal";
 const unsigned long INTERVALO_SENSOR_MS = 200;
 const unsigned long INTERVALO_HEARTBEAT_MS = 2000;
-const float LIMIAR_CHEGADA_CM = 60.0;
+const float LIMIAR_PRESENCA_CM = 60.0;
 const float LIMIAR_LIBERACAO_CM = 100.0;
+const char *FILAS[] = {"fila-a", "fila-b"};
 
-struct FilaSensor {
-  const char *id;
+struct Sensor {
+  const char *fila;
+  const char *tipo;  // "contagem" na entrada, "saida" na saída
   uint8_t trig;
   uint8_t echo;
-  bool sensorOcupado;
+  bool ocupado;
 };
 
-FilaSensor filas[2] = {
-  {"fila-a", 32, 33, false},
-  {"fila-b", 18, 19, false},
+Sensor sensores[4] = {
+  {"fila-a", "contagem", 32, 33, false},
+  {"fila-a", "saida", 25, 26, false},
+  {"fila-b", "contagem", 18, 19, false},
+  {"fila-b", "saida", 22, 23, false},
 };
 
 WiFiClientSecure tls;
@@ -48,13 +52,13 @@ Pendente pendentes[32];
 int inicio = 0;
 int quantidadePendente = 0;
 
-float distanciaCm(const FilaSensor &fila) {
-  digitalWrite(fila.trig, LOW);
+float distanciaCm(const Sensor &sensor) {
+  digitalWrite(sensor.trig, LOW);
   delayMicroseconds(2);
-  digitalWrite(fila.trig, HIGH);
+  digitalWrite(sensor.trig, HIGH);
   delayMicroseconds(10);
-  digitalWrite(fila.trig, LOW);
-  unsigned long pulso = pulseIn(fila.echo, HIGH, 30000);
+  digitalWrite(sensor.trig, LOW);
+  unsigned long pulso = pulseIn(sensor.echo, HIGH, 30000);
   return pulso == 0 ? 400.0 : pulso / 58.0;
 }
 
@@ -79,20 +83,20 @@ void publicarPendentes() {
   }
 }
 
-void publicarEvento(FilaSensor &fila, const char *tipo) {
-  // Heartbeat é descartável: não ocupa o buffer reservado às chegadas
+void publicarEvento(const char *fila, const char *tipo) {
+  // Heartbeat é descartável: não ocupa o buffer reservado aos movimentos
   // durante uma queda do broker.
   if (strcmp(tipo, "heartbeat") == 0 &&
       (!mqtt.connected() || quantidadePendente > 0)) return;
   StaticJsonDocument<256> doc;
-  doc["filaId"] = fila.id;
+  doc["filaId"] = fila;
   doc["tipo"] = tipo;
   doc["sequence"] = ++sequencia;
   doc["eventTimeMs"] = static_cast<uint64_t>(time(nullptr)) * 1000;
   doc["eventId"] = bootId + "-" + String(sequencia);
   String payload;
   serializeJson(doc, payload);
-  String topico = String("fila/") + fila.id + "/" + tipo;
+  String topico = String("fila/") + fila + "/" + tipo;
   if (strcmp(tipo, "heartbeat") == 0) {
     mqtt.publish(topico, payload, false, 1);
   } else {
@@ -101,14 +105,15 @@ void publicarEvento(FilaSensor &fila, const char *tipo) {
   }
 }
 
-void verificarSensor(FilaSensor &fila) {
-  float cm = distanciaCm(fila);
-  if (!fila.sensorOcupado && cm <= LIMIAR_CHEGADA_CM) {
-    fila.sensorOcupado = true;
-    Serial.printf("Chegada detectada na %s (%.0f cm)\n", fila.id, cm);
-    publicarEvento(fila, "contagem");
-  } else if (fila.sensorOcupado && cm >= LIMIAR_LIBERACAO_CM) {
-    fila.sensorOcupado = false;
+void verificarSensor(Sensor &sensor) {
+  float cm = distanciaCm(sensor);
+  if (!sensor.ocupado && cm <= LIMIAR_PRESENCA_CM) {
+    sensor.ocupado = true;
+    Serial.printf("%s detectada na %s (%.0f cm)\n",
+                  strcmp(sensor.tipo, "saida") == 0 ? "Saída" : "Chegada", sensor.fila, cm);
+    publicarEvento(sensor.fila, sensor.tipo);
+  } else if (sensor.ocupado && cm >= LIMIAR_LIBERACAO_CM) {
+    sensor.ocupado = false;
   }
 }
 
@@ -126,9 +131,9 @@ void conectarMqtt() {
 
 void setup() {
   Serial.begin(115200);
-  for (FilaSensor &fila : filas) {
-    pinMode(fila.trig, OUTPUT);
-    pinMode(fila.echo, INPUT);
+  for (Sensor &sensor : sensores) {
+    pinMode(sensor.trig, OUTPUT);
+    pinMode(sensor.echo, INPUT);
   }
   bootId = String(esp_random(), HEX);
   WiFi.begin("Wokwi-GUEST", "", 6);
@@ -146,11 +151,11 @@ void loop() {
   conectarMqtt();
   if (millis() - ultimaLeitura >= INTERVALO_SENSOR_MS) {
     ultimaLeitura = millis();
-    for (FilaSensor &fila : filas) verificarSensor(fila);
+    for (Sensor &sensor : sensores) verificarSensor(sensor);
   }
   if (millis() - ultimoHeartbeat >= INTERVALO_HEARTBEAT_MS) {
     ultimoHeartbeat = millis();
-    for (FilaSensor &fila : filas) publicarEvento(fila, "heartbeat");
+    for (const char *fila : FILAS) publicarEvento(fila, "heartbeat");
   }
   publicarPendentes();
 }

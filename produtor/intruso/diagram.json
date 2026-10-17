@@ -5,7 +5,9 @@
   "parts": [
     { "type": "wokwi-esp32-devkit-v1", "id": "esp_sensores", "top": 0, "left": 0, "attrs": {} },
     { "type": "wokwi-hc-sr04", "id": "sensor_a", "top": 220, "left": -190, "attrs": { "distance": "400" } },
-    { "type": "wokwi-hc-sr04", "id": "sensor_b", "top": 220, "left": 230, "attrs": { "distance": "400" } }
+    { "type": "wokwi-hc-sr04", "id": "sensor_b", "top": 220, "left": 230, "attrs": { "distance": "400" } },
+    { "type": "wokwi-hc-sr04", "id": "sensor_a_saida", "top": 380, "left": -190, "attrs": { "distance": "400" } },
+    { "type": "wokwi-hc-sr04", "id": "sensor_b_saida", "top": 380, "left": 230, "attrs": { "distance": "400" } }
   ],
   "connections": [
     [ "esp_sensores:TX0", "$serialMonitor:RX", "", [] ],
@@ -17,7 +19,15 @@
     [ "esp_sensores:D18", "sensor_b:TRIG", "blue", [] ],
     [ "esp_sensores:D19", "sensor_b:ECHO", "blue", [] ],
     [ "esp_sensores:VIN", "sensor_b:VCC", "red", [] ],
-    [ "esp_sensores:GND.2", "sensor_b:GND", "black", [] ]
+    [ "esp_sensores:GND.2", "sensor_b:GND", "black", [] ],
+    [ "esp_sensores:D25", "sensor_a_saida:TRIG", "green", [] ],
+    [ "esp_sensores:D26", "sensor_a_saida:ECHO", "green", [] ],
+    [ "esp_sensores:VIN", "sensor_a_saida:VCC", "red", [] ],
+    [ "esp_sensores:GND.1", "sensor_a_saida:GND", "black", [] ],
+    [ "esp_sensores:D22", "sensor_b_saida:TRIG", "green", [] ],
+    [ "esp_sensores:D23", "sensor_b_saida:ECHO", "green", [] ],
+    [ "esp_sensores:VIN", "sensor_b_saida:VCC", "red", [] ],
+    [ "esp_sensores:GND.2", "sensor_b_saida:GND", "black", [] ]
   ],
   "dependencies": {}
 }

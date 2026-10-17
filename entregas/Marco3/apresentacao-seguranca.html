@@ -167,7 +167,7 @@
       <tr><td>Identidade do broker</td><td>Certificado X.509 assinado pela nossa CA</td><td><code>RSA-2048</code> no broker, <code>RSA-3072</code> na CA, assinatura <code>SHA-256</code></td></tr>
       <tr><td>Senhas guardadas no broker</td><td>Hash lento com sal</td><td><code>PBKDF2-HMAC-SHA512</code> (formato <code>$7$</code> do Mosquitto)</td></tr>
       <tr><td>Geração das senhas</td><td>Gerador aleatório criptográfico</td><td><code>openssl rand -hex 24</code>: 192 bits</td></tr>
-      <tr><td>Identificador de cada validação</td><td>Identificador aleatório</td><td><code>uuid4</code>, que não dá para prever nem reaproveitar</td></tr>
+      <tr><td>Identificador de cada leitura facial</td><td>Identificador aleatório</td><td><code>uuid4</code>, que não dá para prever nem reaproveitar</td></tr>
     </tbody>
   </table>
   </div>
@@ -278,11 +278,11 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
   <table>
     <thead><tr><th>Identidade</th><th>Pode publicar</th><th>Pode ler</th><th>Não pode</th></tr></thead>
     <tbody>
-      <tr><td><code>produtor</code></td><td class="pode">contagem, heartbeat</td><td class="nao">nada</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
+      <tr><td><code>produtor</code></td><td class="pode">contagem, saída, heartbeat</td><td class="nao">nada</td><td class="nao">ler telemetria de outros, emitir estado</td></tr>
       <tr><td><code>consumidor</code></td><td class="nao">nada</td><td class="pode">estado</td><td class="nao">criar chegadas ou saídas</td></tr>
-      <tr><td><code>validador</code></td><td class="pode">validação</td><td class="pode">estado</td><td class="nao">criar chegadas, emitir recomendação</td></tr>
-      <tr><td><code>processador</code></td><td class="pode">recomendação, estado</td><td class="pode">contagem, validação, heartbeat</td><td class="nao">forjar telemetria</td></tr>
-      <tr><td><code>observador</code></td><td class="nao">nada</td><td class="pode">fila/#</td><td class="nao">qualquer escrita</td></tr>
+      <tr><td><code>validador</code></td><td class="pode">leitura facial</td><td class="pode">resultado, estado</td><td class="nao">criar entradas ou saídas, decidir o próprio resultado</td></tr>
+      <tr><td><code>processador</code></td><td class="pode">resultado, recomendação, estado</td><td class="pode">contagem, saída, heartbeat, leitura</td><td class="nao">forjar telemetria</td></tr>
+      <tr><td><code>observador</code></td><td class="nao">nada</td><td class="pode">tudo, menos leitura facial</td><td class="nao">qualquer escrita, ver biometria</td></tr>
     </tbody>
   </table>
   </div>
@@ -297,7 +297,7 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
     <div class="card"><h3>Geração por script</h3><p><code>configurar-seguranca.sh</code> cria a CA, o certificado do broker e as cinco senhas. O script se <strong>recusa a sobrescrever</strong> uma configuração existente.</p></div>
     <div class="card"><h3>Evolução sem quebrar</h3><p><code>--adicionar-consumidor</code> e <code>--adicionar-validador</code> incluem um papel novo, e <code>--renovar-certificados</code> troca o certificado, tudo sem mudar as outras senhas.</p></div>
     <div class="card"><h3>Firmware sem segredo versionado</h3><p><code>preparar-wokwi.py</code> gera <code>segredos.h</code> e <code>segredos_consumidor.h</code>, cada um só com a senha do seu papel e a CA. Os dois arquivos estão no <code>.gitignore</code>.</p></div>
-    <div class="card"><h3>Navegador sem credencial</h3><p>A página de validação conversa só com o servidor Python local, e é o servidor que publica no MQTT como <code>validador</code>.</p></div>
+    <div class="card"><h3>Navegador sem credencial</h3><p>A página do validador conversa só com o servidor Python local, e é o servidor que publica no MQTT como <code>validador</code>.</p></div>
   </div>
 </section>
 
@@ -309,16 +309,18 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
       <h3 style="margin-top:0">Processador</h3>
       <ul>
         <li>Confere se o <code>filaId</code> do payload é igual à fila do tópico.</li>
-        <li>Só aceita os tipos <code>contagem</code>, <code>validacao</code> e <code>heartbeat</code>, e o resultado precisa ser <code>aprovado</code> ou <code>reprovado</code>.</li>
+        <li>Só aceita os tipos <code>contagem</code>, <code>saida</code>, <code>heartbeat</code> e <code>leitura</code>, e descarta payloads que não são JSON em vez de cair.</li>
+        <li>Só ele decide o resultado do reconhecimento facial: o validador envia a leitura, mas não pode publicar o resultado.</li>
         <li>Descarta eventos repetidos pelo <code>eventId</code>, com <code>INSERT OR IGNORE</code> no SQLite. Assim, uma reentrega do QoS 1 não conta a mesma pessoa duas vezes.</li>
         <li>Decide se o enlace está vivo pelo <strong>relógio do próprio processador</strong>, nunca pelo horário que o dispositivo informa.</li>
       </ul>
     </div>
     <div>
-      <h3 style="margin-top:0">Servidor de validação e consumidor</h3>
+      <h3 style="margin-top:0">Servidor do validador e consumidor</h3>
       <ul>
         <li>O HTTP escuta só em <code>127.0.0.1:8000</code>.</li>
-        <li>O POST aceita no máximo 1&nbsp;KB, só <code>fila-a</code> ou <code>fila-b</code>, e responde <code>409</code> se a fila estiver vazia.</li>
+        <li>O POST aceita no máximo 1&nbsp;KB, só <code>fila-a</code> ou <code>fila-b</code> e uma referência de foto de até 256 caracteres.</li>
+        <li>Só a referência da foto passa pelo broker; a imagem não chega a nenhum assinante.</li>
         <li>O <code>eventId</code> é gerado pelo servidor (<code>uuid4</code>), não pelo navegador.</li>
         <li>O ESP32 consumidor só aplica um estado se o tópico e o <code>filaId</code> coincidirem.</li>
       </ul>

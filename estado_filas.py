@@ -63,7 +63,7 @@ class EstadoFilas:
                     "UPDATE filas SET entradas = entradas + 1 WHERE fila_id = ?",
                     (fila_id,),
                 )
-            elif novo and tipo == "validacao" and payload.get("resultado") == "aprovado":
+            elif novo and tipo == "saida":
                 self.conexao.execute(
                     "UPDATE filas SET saidas = saidas + 1 "
                     "WHERE fila_id = ? AND saidas < entradas", (fila_id,)

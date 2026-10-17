@@ -8,13 +8,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from mqtt_config import conectar
 
-TOPICO_TODAS_FILAS = "fila/#"
+# Tudo menos fila/+/leitura: a leitura facial interessa só ao processador.
+TOPICOS = ["contagem", "saida", "heartbeat", "resultado", "estado", "recomendacao"]
 
 ultimo_heartbeat = {}
 
 def on_message(client, userdata, msg):
-    payload = json.loads(msg.payload.decode())
-    fila = payload["filaId"]
+    try:
+        payload = json.loads(msg.payload.decode())
+        fila = payload["filaId"]
+    except (ValueError, KeyError, TypeError):
+        print(f"Mensagem inválida em {msg.topic}: descartada")
+        return
 
     tipo_evento = payload.get("tipo", msg.topic.rsplit("/", 1)[-1])
     sequence = payload.get("sequence", "-")
@@ -25,6 +30,9 @@ def on_message(client, userdata, msg):
         print(f"[{timestamp}] {fila}: {tipo_evento} seq={sequence} (latência {latencia:.0f}ms)")
     else:
         print(f"[{datetime.now()}] {fila}: {tipo_evento} seq={sequence} (sem carimbo de origem)")
+
+    if tipo_evento == "resultado":
+        print(f"    leitura {payload.get('eventId')}: {payload.get('resultado')}")
 
     if "motivo" in payload:
         print(f"    {payload['semaforo']} -> {payload['sentidoRecomendado']}: {payload['motivo']}")
@@ -39,8 +47,8 @@ def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code != 0:
         print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
         return
-    client.subscribe(TOPICO_TODAS_FILAS)
-    print("Conectado ao broker - assinatura restabelecida")
+    client.subscribe([(f"fila/+/{topico}", 0) for topico in TOPICOS])
+    print("Conectado ao broker - assinaturas restabelecidas")
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect

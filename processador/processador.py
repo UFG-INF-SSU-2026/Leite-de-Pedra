@@ -4,6 +4,7 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 import threading
+import queue
 import statistics
 import sys
 from pathlib import Path
@@ -14,10 +15,17 @@ from estado_filas import EstadoFilas
 from mqtt_config import conectar
 
 TOPICO_CONTAGEM = "fila/+/contagem"
-TOPICO_VALIDACAO = "fila/+/validacao"
+TOPICO_SAIDA = "fila/+/saida"
 TOPICO_HEARTBEAT = "fila/+/heartbeat"
+TOPICO_LEITURA = "fila/+/leitura"
 TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
 TOPICO_ESTADO = "fila/{}/estado"
+TOPICO_RESULTADO = "fila/{}/resultado"
+
+# ponytail: simula o SearchFacesByImage do AWS Rekognition sobre uma coleção
+# fixa. Trocar avaliar_rosto pela chamada real quando a coleção e o bucket
+# existirem; o resto do fluxo não muda.
+ROSTOS_CADASTRADOS = {"demo/rosto-cadastrado.jpg"}
 
 # As filas não são declaradas: o processador as descobre pelos tópicos que
 # chegam. Assim ele não precisa ser reiniciado nem reconfigurado quando o
@@ -26,8 +34,8 @@ filas = []
 
 # Os limiares são de TEMPO DE ESPERA ESTIMADO, não de quantidade de pessoas.
 # Dez pessoas numa fila não significam nada sozinhas: dependem de quanto tempo
-# o validador leva por pessoa. Em tempo de espera o semáforo significa algo que
-# quem está chegando entende, e se um validador ficar lento a fila fecha com
+# a entrada leva por pessoa. Em tempo de espera o semáforo significa algo que
+# quem está chegando entende, e se a entrada ficar lenta a fila fecha com
 # menos gente, automaticamente.
 LIMITE_ATENCAO = 15        # segundos de espera estimada
 LIMITE_BLOQUEIO = 30
@@ -38,11 +46,11 @@ MARGEM_HISTERESE = 7
 VALIDADE_DADOS_SEGUNDOS = 15
 
 # A vazão é medida só sobre as passagens recentes. Sem esse corte, uma fila que
-# ficou vazia por um tempo arrasta na janela validações antigas e a taxa sai
+# ficou vazia por um tempo arrasta na janela saídas antigas e a taxa sai
 # diluída por um período em que não havia ninguém para atender - o que faria a
 # espera parecer maior do que é.
 JANELA_VAZAO = timedelta(seconds=90)
-TEMPO_PASSAGEM_INICIAL = 7  # estimativa até observar ao menos duas validações
+TEMPO_PASSAGEM_INICIAL = 7  # estimativa até o sensor de saída registrar duas passagens
 
 NIVEL = {"livre": 0, "atencao": 1, "bloqueada": 2}
 ROTULOS = {"livre": "VERDE", "atencao": "AMARELO", "bloqueada": "VERMELHO"}
@@ -64,6 +72,7 @@ semaforo = {}
 ultima_publicacao = {}
 ultimo_heartbeat_recebido = {}
 ultimo_estado_publicado = {}
+leituras = queue.Queue()
 
 def registrar(fila):
     if fila in entradas:
@@ -80,28 +89,41 @@ def registrar(fila):
     print(f"Fila descoberta: {fila} ({len(filas)} no total)")
 
 def on_message(client, userdata, msg):
-    payload = json.loads(msg.payload.decode())
+    try:
+        payload = json.loads(msg.payload.decode())
+    except ValueError:
+        print(f"Payload que não é JSON em {msg.topic}: descartado")
+        return
     partes = msg.topic.split("/")
-    if len(partes) != 3 or partes[0] != "fila":
+    if len(partes) != 3 or partes[0] != "fila" or not isinstance(payload, dict):
         return
     fila, tipo = partes[1], partes[2]
-    if payload.get("filaId") != fila or tipo not in {"contagem", "validacao", "heartbeat"}:
+    if payload.get("filaId") != fila or tipo not in {"contagem", "saida", "heartbeat", "leitura"}:
         print(f"Evento inválido em {msg.topic}: tópico e payload divergentes")
         return
     if "eventTimeMs" not in payload:
         print(f"Evento sem eventTimeMs em {msg.topic}")
         return
+
+    if tipo == "leitura":
+        if not isinstance(payload.get("fotoRef"), str) or not payload.get("eventId"):
+            print(f"Leitura sem fotoRef ou eventId em {msg.topic}")
+            return
+        # A deduplicação usa a mesma tabela dos movimentos, sem alterar o saldo.
+        # O Rekognition leva perto de 1 s: roda fora da thread do MQTT para
+        # não atrasar contagens e saídas.
+        if estado_persistente.aplicar(fila, tipo, payload)[0]:
+            leituras.put(payload)
+        return
+
     registrar(fila)
 
-    if tipo in {"contagem", "validacao"}:
-        if tipo == "validacao" and payload.get("resultado") not in {"aprovado", "reprovado"}:
-            print(f"Resultado de validação inválido em {msg.topic}")
-            return
+    if tipo in {"contagem", "saida"}:
         saidas_antes = saidas[fila]
         novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, tipo, payload)
         if not novo:
             return
-        if tipo == "validacao" and saidas[fila] > saidas_antes:
+        if tipo == "saida" and saidas[fila] > saidas_antes:
             instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
     elif tipo == "heartbeat":
@@ -111,6 +133,30 @@ def on_message(client, userdata, msg):
         ultimo_heartbeat_recebido[fila] = time.monotonic()
 
     recomendar_fila(client)
+
+def avaliar_rosto(foto_ref):
+    return "aceito" if foto_ref in ROSTOS_CADASTRADOS else "recusado"
+
+def avaliar_leitura(client, leitura):
+    try:
+        resultado = avaliar_rosto(leitura["fotoRef"])
+    except Exception as erro:
+        # Sem resposta do reconhecimento o operador decide manualmente.
+        print(f"Falha no reconhecimento de {leitura['eventId']}: {erro}")
+        resultado = "indeterminado"
+    payload = {
+        "eventId": leitura["eventId"],
+        "filaId": leitura["filaId"],
+        "tipo": "resultado",
+        "resultado": resultado,
+        "eventTimeMs": int(time.time() * 1000),
+    }
+    client.publish(TOPICO_RESULTADO.format(leitura["filaId"]), json.dumps(payload), qos=1)
+    print(f"Leitura {leitura['eventId']} na {leitura['filaId']}: {resultado}")
+
+def reconhecimento(client):
+    while True:
+        avaliar_leitura(client, leituras.get())
 
 def heartbeat_recente(fila, agora_monotonico):
     ultimo = ultimo_heartbeat_recebido[fila]
@@ -126,7 +172,7 @@ def passagens_recentes(fila, agora):
 def vazao_de(fila, agora):
     # Só conta como atendimento o intervalo em que sabíamos haver alguém
     # esperando: cada passagem registra quanta gente ficou na fila, e se ficou
-    # zero o intervalo seguinte foi de fila vazia, não de validador ocupado.
+    # zero o intervalo seguinte foi de fila vazia, não de entrada ocupada.
     # Sem essa separação a ociosidade entra na conta e a espera parece maior do
     # que é - com a fila-b chegando a mostrar 39s para 2 pessoas.
     recentes = passagens_recentes(fila, agora)
@@ -149,7 +195,7 @@ def espera_de(fila, agora):
 
     # Antes de medir a vazão, usa uma duração inicial por pessoa. Assim uma
     # fila que cresce já pode ficar amarela ou vermelha. Após atender pessoas,
-    # se passar a janela inteira sem saída, considera o validador parado.
+    # se passar a janela inteira sem saída, considera a entrada parada.
     if not passagens_recentes(fila, agora):
         return float("inf") if fila_saidas[fila] else ocupacao * TEMPO_PASSAGEM_INICIAL
 
@@ -162,7 +208,7 @@ def classificar(fila, espera):
     atual = semaforo[fila]
 
     # Sem vazão medida ainda não há como estimar espera; mantém o estado atual
-    # em vez de inventar um. Se o validador parar, a janela de medição se
+    # em vez de inventar um. Se a entrada parar, a janela de medição se
     # alarga sozinha, a vazão cai e a espera sobe - a fila fecha sem caso especial.
     if espera is None:
         return atual
@@ -330,8 +376,9 @@ def on_connect(client, userdata, flags, reason_code, properties):
         print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
         return
     client.subscribe(TOPICO_CONTAGEM)
-    client.subscribe(TOPICO_VALIDACAO)
+    client.subscribe(TOPICO_SAIDA)
     client.subscribe(TOPICO_HEARTBEAT)
+    client.subscribe(TOPICO_LEITURA)
     # Um broker reiniciado perde publicações retidas; republicar após o
     # primeiro heartbeat sem depender de mudança no estado da fila.
     for fila in filas:
@@ -350,4 +397,5 @@ for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
     print(f"Estado recuperado: {fila_salva}, {ocupacao_de(fila_salva)} pessoa(s)")
 conectar(client, "processador")
 threading.Thread(target=painel, daemon=True).start()
+threading.Thread(target=reconhecimento, args=(client,), daemon=True).start()
 client.loop_forever()

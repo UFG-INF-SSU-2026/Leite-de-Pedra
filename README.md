@@ -5,17 +5,19 @@
 O sistema conta quem entra e quem sai de cada fila de entrada de um evento,
 estima o tempo de espera e sinaliza num semáforo (verde, amarelo, vermelho)
 qual fila procurar, para que um pico de chegada se distribua em vez de
-empilhar numa fila só.
+empilhar numa fila só. Na catraca, a pessoa é identificada pelo rosto: o
+processador compara a leitura com a coleção do AWS Rekognition e devolve se
+ela foi aceita.
 
 ## Estrutura do repositório
 
 | Pasta | O que é |
 |---|---|
-| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware. |
-| [`validador/`](validador/) | Validação de tickets pelo operador. Hoje é uma página local (`index.html`) servida por `servidor.py`; será substituída pela aplicação mobile. |
+| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 das filas com um sensor na entrada e outro na saída de cada fila (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware. |
+| [`validador/`](validador/) | Leitura facial na catraca: envia a leitura ao processador e mostra se a pessoa foi aceita. Hoje é uma página local (`index.html`) servida por `servidor.py` que simula a câmera; será substituída pela aplicação mobile. |
 | [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
-| [`processador/`](processador/) | Serviço que consome contagens e validações, calcula ocupação, vazão e espera e publica o estado de cada fila. |
-| [`observador/`](observador/) | Acompanha todos os tópicos, mede latência e alerta queda de enlace. Hoje roda no terminal; será o painel web de visualização. |
+| [`processador/`](processador/) | Serviço que consome os movimentos dos sensores e as leituras faciais, calcula ocupação, vazão e espera, decide o reconhecimento facial e publica o estado de cada fila e o resultado de cada leitura. |
+| [`observador/`](observador/) | Acompanha movimentos, resultados e estados (nunca as leituras faciais), mede latência e alerta queda de enlace. Hoje roda no terminal; será o painel web de visualização. |
 | [`tests/`](tests/) | Testes automatizados (`python3 -m unittest discover -s tests`). |
 | [`entregas/`](entregas/) | Entregas da disciplina; ver [Entregas](#entregas). |
 
@@ -27,26 +29,32 @@ filas em SQLite).
 
 ```mermaid
 flowchart LR
-    P["<b>ESP32 de entrada</b><br/>dois sensores de proximidade"]
-    S["<b>ESP32 consumidor</b><br/>LCD e LEDs"]
-    V["<b>Validador local</b><br/>tickets pelo navegador"]
+    P["<b>Produtor</b><br/>ESP32 com sensores de<br/>entrada e saída por fila"]
+    S["<b>Consumidor</b><br/>ESP32 com LCD e LEDs"]
+    V["<b>Validador</b><br/>leitura facial na catraca"]
     B(("Broker MQTT/TLS<br/>mosquitto :8883"))
-    C["<b>Processador</b><br/>ocupação, vazão, espera<br/>classifica o semáforo"]
-    O["<b>Observador</b><br/>latência e alerta de enlace"]
+    C["<b>Processador</b><br/>ocupação, vazão, espera<br/>reconhecimento facial"]
+    R[("AWS Rekognition")]
+    O["<b>Observador</b><br/>painel de visualização"]
 
-    P -- "fila/{id}/contagem<br/>fila/{id}/heartbeat" --> B
-    V -- "fila/{id}/validacao" --> B
-    B -- "fila/+/contagem<br/>fila/+/validacao<br/>fila/+/heartbeat" --> C
-    C -- "fila/{id}/recomendacao" --> B
+    P -- "fila/{id}/contagem<br/>fila/{id}/saida<br/>fila/{id}/heartbeat" --> B
+    V -- "fila/{id}/leitura" --> B
+    B -- "contagem, saida,<br/>heartbeat, leitura" --> C
+    C <-. "busca o rosto" .-> R
+    C -- "fila/{id}/resultado<br/>fila/{id}/estado<br/>fila/{id}/recomendacao" --> B
     B -- "fila/{id}/estado" --> S
-    B -- "fila/{id}/estado" --> V
-    B -. "fila/#" .-> O
+    B -- "fila/{id}/resultado<br/>fila/{id}/estado" --> V
+    B -. "tudo menos leitura" .-> O
 ```
 
-1. O **ESP32 de entrada** detecta chegadas pelos HC-SR04 e publica contagem e heartbeat.
-2. A **página local** simula a validação do ticket e publica a saída aprovada.
-3. O **processador** mantém o saldo em SQLite, mede a vazão e publica o estado da fila.
-4. O **ESP32 consumidor** recebe o estado e acende LEDs e LCD; o **observador** acompanha todos os eventos.
+1. O **produtor** detecta pelos HC-SR04 quem entra (`contagem`) e quem sai (`saida`) de cada fila e publica também o heartbeat.
+2. O **validador** lê o rosto na catraca e publica a `leitura`, com a referência da foto.
+3. O **processador** mantém o saldo em SQLite a partir dos sensores, mede a vazão pelas saídas e estima a espera. Para cada leitura, consulta o Rekognition e publica o `resultado`: `aceito`, `recusado` ou `indeterminado`.
+4. O **validador** recebe o resultado e libera ou barra a pessoa; o **consumidor** acende LEDs e LCD indicando a fila com menor espera; o **observador** acompanha tudo, exceto as leituras faciais.
+
+A ocupação depende só dos sensores: uma pessoa recusada ou que desiste
+continua sendo contada até passar pelo sensor de saída. O reconhecimento
+decide quem passa, não quantos estão na fila.
 
 O Wokwi não executa dois microcontroladores no mesmo projeto. Por isso há
 dois circuitos (`produtor/diagram.json` e `produtor/consumidor/diagram.json`),
@@ -55,11 +63,11 @@ não por fios entre as placas.
 
 | Componente | Publica | Assina |
 |---|---|---|
-| `produtor/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/heartbeat` | — |
+| `produtor/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/saida`, `fila/{id}/heartbeat` | — |
 | `produtor/src/consumidor.cpp` (`consumidor`) | — | `fila/+/estado` |
-| `validador/servidor.py` (`validador`) | `fila/{id}/validacao` | `fila/+/estado` |
-| `processador/processador.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
-| `observador/observador.py` | — | `fila/#` |
+| `validador/servidor.py` (`validador`) | `fila/{id}/leitura` | `fila/+/resultado`, `fila/+/estado` |
+| `processador/processador.py` | `fila/{id}/resultado`, `fila/{id}/estado`, `fila/{id}/recomendacao` | `fila/+/contagem`, `fila/+/saida`, `fila/+/heartbeat`, `fila/+/leitura` |
+| `observador/observador.py` | — | `contagem`, `saida`, `heartbeat`, `resultado`, `estado`, `recomendacao` |
 
 Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`.
 
@@ -71,25 +79,20 @@ Todos são JSON.
 
 `eventTimeMs` é o instante em que o evento aconteceu (epoch em ms), obtido do
 relógio do ESP32 sincronizado inicialmente por NTP. O ESP32
-atribui `eventId` único às chegadas; o validador também atribui um `eventId`
-à validação. O processador ignora eventos repetidos pelo MQTT.
+atribui `eventId` único a cada movimento; o validador também atribui um
+`eventId` a cada leitura. O processador ignora eventos repetidos pelo MQTT.
 
-**`fila/{id}/contagem`** — o sensor ultrassônico detectou uma pessoa entrando na fila.
+**`fila/{id}/contagem`** — o sensor de entrada detectou uma pessoa entrando na fila.
 
 ```json
 {"eventId": "esp32-abc-41", "filaId": "fila-a", "tipo": "contagem", "eventTimeMs": 1758200000000}
 ```
 
-**`fila/{id}/validacao`** — o operador validou um ticket na página local.
-Somente `aprovado` tira alguém da fila; o endpoint desta demonstração publica
-apenas aprovações.
+**`fila/{id}/saida`** — o sensor de saída detectou uma pessoa deixando a fila.
+É o que reduz a ocupação e mede a vazão.
 
 ```json
-{"eventId": "id-unico", "filaId": "fila-a", "tipo": "validacao", "eventTimeMs": 1758200007000, "resultado": "aprovado"}
-```
-
-```json
-{"eventId": "outro-id", "filaId": "fila-a", "tipo": "validacao", "eventTimeMs": 1758200013000, "resultado": "reprovado"}
+{"eventId": "esp32-abc-42", "filaId": "fila-a", "tipo": "saida", "eventTimeMs": 1758200007000}
 ```
 
 **`fila/{id}/heartbeat`** — a cada 2 s simulados, por fila. Não entra na
@@ -101,6 +104,33 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 ```json
 {"filaId": "fila-a", "tipo": "heartbeat", "eventTimeMs": 1758200014000}
 ```
+
+### Leitura facial (validador → processador)
+
+**`fila/{id}/leitura`** — a câmera da catraca capturou um rosto. Só a
+referência da foto passa pelo broker: a imagem fica num bucket e nenhum outro
+assinante recebe biometria. Pela ACL, só o processador lê este tópico.
+
+```json
+{"eventId": "8e7d2184e4f0410895e2af6da4e5e2a1", "filaId": "fila-a", "tipo": "leitura", "fotoRef": "demo/rosto-cadastrado.jpg", "eventTimeMs": 1758200006000}
+```
+
+**`fila/{id}/resultado`** — a decisão do processador para aquela leitura,
+com o mesmo `eventId`, para o validador saber a qual leitura ela responde.
+
+```json
+{"eventId": "8e7d2184e4f0410895e2af6da4e5e2a1", "filaId": "fila-a", "tipo": "resultado", "resultado": "aceito", "eventTimeMs": 1758200006900}
+```
+
+| `resultado` | Significado |
+|---|---|
+| `aceito` | o rosto corresponde a alguém com ingresso |
+| `recusado` | nenhum rosto da coleção corresponde |
+| `indeterminado` | o reconhecimento falhou; o operador decide manualmente |
+
+Por enquanto o reconhecimento é simulado em `avaliar_rosto`, no processador:
+aceita só `demo/rosto-cadastrado.jpg`. A troca pelo `SearchFacesByImage` do
+Rekognition acontece só nessa função, quando a coleção e o bucket existirem.
 
 ### Recomendação e estado (processador → consumidor e observador)
 
@@ -120,16 +150,16 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 | Campo | Valores |
 |---|---|
 | `semaforo` | `livre` (verde, espera ≤ 15 s), `atencao` (amarelo, 15–30 s), `bloqueada` (vermelho, > 30 s) |
-| `ocupacao` | entradas contadas − saídas aprovadas |
+| `ocupacao` | entradas − saídas registradas pelos sensores |
 | `sentidoRecomendado` | a própria fila (permanecer) ou a fila para onde desviar |
 | `motivo` | texto explicando a decisão |
-| `tempoEsperaEstimado` | segundos; `null` se a espera ficar indeterminada (por exemplo, validador parado) |
+| `tempoEsperaEstimado` | segundos; `null` se a espera ficar indeterminada (por exemplo, ninguém saindo da fila) |
 
 **`fila/{id}/estado`** contém `filaId`, `semaforo`, `ocupacao`,
 `sentidoRecomendado` e `tempoEsperaEstimado`. É publicado com QoS 1 e `retain`
 para que o consumidor recupere o estado ao reconectar. A ocupação é persistida em
 `.local/filas.sqlite3`.
-Antes de haver duas validações, a espera usa 7 s por pessoa; depois passa a
+Antes de o sensor de saída registrar duas passagens, a espera usa 7 s por pessoa; depois passa a
 usar a vazão observada. Assim o semáforo já reage ao crescimento da fila.
 
 ## Como rodar
@@ -141,11 +171,11 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 
 | Identidade | Permissões |
 |---|---|
-| `produtor` | publica chegadas/heartbeat |
+| `produtor` | publica entradas, saídas e heartbeat |
 | `consumidor` | somente lê o estado das filas |
-| `processador` | lê telemetria e publica recomendações |
-| `observador` | somente lê `fila/#` |
-| `validador` | publica validações e lê o estado das filas |
+| `processador` | lê movimentos e leituras faciais; publica resultados, estados e recomendações |
+| `observador` | somente lê; não tem acesso às leituras faciais |
+| `validador` | publica leituras faciais; lê resultados e o estado das filas |
 
 O listener sem criptografia foi removido. Toda comunicação usa MQTT sobre TLS na
 porta 8883, e os clientes validam o certificado do broker usando a CA local.
@@ -203,13 +233,18 @@ em `host.wokwi.internal:8883` (consulte a disponibilidade dessa função na sua
 licença). Cada firmware usa um cabeçalho local próprio, gerado em
 `produtor/include/` e ignorado pelo Git, com apenas a senha do seu papel MQTT.
 
-No Wokwi, clique em cada HC-SR04 para alterar a distância. Faça o ciclo
-**400 cm → 40 cm → 400 cm** para representar a passagem de uma pessoa pela
-entrada; só a transição para perto conta. Repita na fila A até haver três
-pessoas: com a estimativa inicial de 7 s por pessoa, ela fica amarela. Cinco
-pessoas a deixam vermelha. Na página, valide um ticket da fila A para registrar
-uma saída; a contagem cai uma unidade. O LCD e os LEDs da segunda simulação
-seguem o estado enviado pelo processador.
+O circuito dos sensores tem quatro HC-SR04: na linha de cima, as entradas
+das filas A e B; na de baixo, as saídas. No Wokwi, clique em um sensor para
+alterar a distância. Faça o ciclo **400 cm → 40 cm → 400 cm** para
+representar a passagem de uma pessoa; só a transição para perto conta. Repita
+na entrada da fila A até haver três pessoas: com a estimativa inicial de 7 s
+por pessoa, ela fica amarela. Cinco pessoas a deixam vermelha. Faça o mesmo
+ciclo no sensor de saída da fila A e a ocupação cai uma unidade. O LCD e os
+LEDs da segunda simulação seguem o estado enviado pelo processador.
+
+Na página do validador, **Ler rosto cadastrado** e **Ler rosto
+desconhecido** simulam a câmera. O resultado (`aceito` ou `recusado`) volta
+do processador e aparece no cartão da fila, sem alterar a ocupação.
 
 O SQLite em `.local/filas.sqlite3` preserva a ocupação ao reiniciar o
 processador. Para iniciar outro evento real, arquive ou zere esse banco de forma
@@ -224,7 +259,8 @@ certificado que contenha o nome DNS/IP do servidor e altere o endereço do
 ### Verificação da autorização
 
 Depois de iniciar o broker, um observador autenticado consegue assinar os
-tópicos:
+tópicos. Mesmo assinando `fila/#`, ele não recebe `fila/+/leitura`, porque a ACL
+filtra cada mensagem:
 
 ```
 mosquitto_sub -h localhost -p 8883 \
