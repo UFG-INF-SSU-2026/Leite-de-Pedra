@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block corpo %}
+<main class="login">
+  <h1>Painel das filas</h1>
+  <form method="post" action="/login">
+    <label>Usuário <input name="usuario" autocomplete="username" maxlength="64" required autofocus></label>
+    <label>Senha <input name="senha" type="password" autocomplete="current-password" maxlength="256" required></label>
+    {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+    <button>Entrar</button>
+  </form>
+</main>
+{% endblock %}

@@ -24,14 +24,14 @@ PASTA_LOGS = RAIZ / ".local" / "logs"
 TERMINAIS = {
     "broker": "mosquitto -c broker/mosquitto.conf",
     "processador": "processador/processador.py",
-    "observador": "observador/observador.py",
+    "observador": "observador.painel",
     "validador": None,  # é este próprio processo
 }
 # Exibido ao lado do nome; "→" indica cliente que só se conecta ao broker.
 PORTAS_TERMINAIS = {
     "broker": "8883",
     "processador": "→ 8883",
-    "observador": "→ 8883",
+    "observador": "8443 → 8883",
     "validador": "8000",
 }
 # Portas definidas por rfc2217ServerPort nos wokwi.toml.

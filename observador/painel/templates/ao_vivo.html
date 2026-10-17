@@ -1,0 +1,54 @@
+{% set rotulos = {'livre': 'Livre', 'atencao': 'Atenção', 'bloqueada': 'Bloqueada'} %}
+{% if not broker_conectado %}<p class="erro" role="alert">Broker MQTT indisponível: reconectando.</p>{% endif %}
+
+<h2>Filas agora</h2>
+{% if not filas %}<p class="nota">Nenhuma mensagem recebida ainda.</p>{% endif %}
+<div class="cartoes">
+{% for fila in filas %}
+  {% set estado = fila.estado or {} %}
+  {% set recomendacao = fila.recomendacao or {} %}
+  <section class="cartao {{ estado.semaforo or 'sem-estado' }}">
+    <h3>{{ fila.fila_id }}</h3>
+    <p class="semaforo">{{ rotulos.get(estado.semaforo, 'Sem estado') }}</p>
+    <dl>
+      <dt>Ocupação</dt><dd>{{ estado.ocupacao if estado.ocupacao is not none else '–' }} pessoa(s)</dd>
+      <dt>Espera estimada</dt><dd>{{ estado.tempoEsperaEstimado | segundos }}</dd>
+      <dt>Fila recomendada</dt><dd>{{ estado.sentidoRecomendado or '–' }}</dd>
+      <dt>Entradas / saídas (desde que o painel abriu)</dt><dd>{{ fila.entradas }} / {{ fila.saidas }}</dd>
+      <dt>Último resultado facial</dt>
+      <dd>{% if fila.ultimo_resultado %}<span class="resultado {{ fila.ultimo_resultado.resultado }}">{{ fila.ultimo_resultado.resultado }}</span>
+        às {{ fila.ultimo_resultado.recebido_em | hora }}{% else %}–{% endif %}</dd>
+      <dt>Enlace do ESP32</dt>
+      <dd>{% if fila.enlace_ativo %}<span class="resultado livre">ativo</span>
+        {% elif fila.segundos_sem_heartbeat is none %}<span class="resultado bloqueada">sem heartbeat</span>
+        {% else %}<span class="resultado bloqueada">caído há {{ fila.segundos_sem_heartbeat | int }} s</span>{% endif %}</dd>
+    </dl>
+    {% if recomendacao.motivo %}<p class="motivo">{{ recomendacao.motivo }}</p>{% endif %}
+  </section>
+{% endfor %}
+</div>
+
+<h2>Últimas mensagens recebidas</h2>
+<div class="tabela">
+<table>
+  <thead><tr><th>Recebido</th><th>Origem</th><th>Latência</th><th>Fila</th>
+    <th>Tópico</th><th>Detalhe</th><th>eventId</th></tr></thead>
+  <tbody>
+  {% for mensagem in mensagens %}
+    {% set conteudo = mensagem.payload %}
+    <tr><td>{{ mensagem.recebido_em | hora }}</td><td>{{ mensagem.origem | hora }}</td>
+      <td>{{ mensagem.latencia_ms | ms }}</td><td>{{ mensagem.fila_id }}</td>
+      <td><span class="tipo">{{ mensagem.tipo }}</span></td>
+      <td>
+      {%- if mensagem.tipo == 'resultado' -%}<span class="resultado {{ conteudo.resultado }}">{{ conteudo.resultado }}</span>
+      {%- elif mensagem.tipo == 'estado' -%}<span class="resultado {{ conteudo.semaforo }}">{{ rotulos.get(conteudo.semaforo, conteudo.semaforo) }}</span>, {{ conteudo.ocupacao }} na fila, espera {{ conteudo.tempoEsperaEstimado | segundos }}, ir para {{ conteudo.sentidoRecomendado }}
+      {%- elif mensagem.tipo == 'recomendacao' -%}ir para {{ conteudo.sentidoRecomendado }}: {{ conteudo.motivo }}
+      {%- elif conteudo.sequence is defined -%}seq {{ conteudo.sequence }}
+      {%- endif -%}</td>
+      <td class="id">{{ conteudo.eventId or '' }}</td></tr>
+  {% else %}
+    <tr><td colspan="7">Nenhuma mensagem ainda.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
