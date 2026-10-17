@@ -1,0 +1,41 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg17
+    container_name: leite-de-pedra-banco
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: filas
+      POSTGRES_PASSWORD_FILE: /run/segredos/admin.password
+    volumes:
+      - ../.local/banco:/segredos:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./inicializar.sh:/docker-entrypoint-initdb.d/inicializar.sh:ro
+      - ./esquema.sql:/esquema.sql:ro
+      - dados:/var/lib/postgresql/data
+    # O PostgreSQL só aceita a chave TLS se ela pertencer ao usuário postgres com permissão 600.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        mkdir -p /run/segredos &&
+        cp /segredos/* /run/segredos/ &&
+        chown -R postgres:postgres /run/segredos &&
+        chmod 600 /run/segredos/* &&
+        exec docker-entrypoint.sh postgres
+        -c ssl=on
+        -c ssl_cert_file=/run/segredos/servidor.crt
+        -c ssl_key_file=/run/segredos/servidor.key
+        -c ssl_min_protocol_version=TLSv1.2
+        -c hba_file=/etc/postgresql/pg_hba.conf
+        -c password_encryption=scram-sha-256
+        -c timescaledb.telemetry_level=off
+    healthcheck:
+      test: ["CMD-SHELL", "su postgres -c 'pg_isready -q -d filas'"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  dados:
