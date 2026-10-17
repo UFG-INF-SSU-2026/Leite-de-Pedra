@@ -18,5 +18,6 @@ if [[ ! -f "$RAIZ_PROJETO/.local/mqtt/mosquitto.passwd" ]]; then
 fi
 
 cd "$RAIZ_PROJETO"
+mkdir -p .local/mosquitto
 chmod 600 broker/mosquitto.acl
 exec "$EXECUTAVEL_MOSQUITTO" -c broker/mosquitto.conf

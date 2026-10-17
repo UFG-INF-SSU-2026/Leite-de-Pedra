@@ -9,6 +9,8 @@ import statistics
 import sys
 from pathlib import Path
 
+import psycopg
+
 # Os módulos compartilhados ficam na raiz.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from estado_filas import EstadoFilas
@@ -22,9 +24,7 @@ TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
 TOPICO_ESTADO = "fila/{}/estado"
 TOPICO_RESULTADO = "fila/{}/resultado"
 
-# ponytail: simula o SearchFacesByImage do AWS Rekognition sobre uma coleção
-# fixa. Trocar avaliar_rosto pela chamada real quando a coleção e o bucket
-# existirem; o resto do fluxo não muda.
+# Simulação do SearchFacesByImage do AWS Rekognition até a coleção real existir.
 ROSTOS_CADASTRADOS = {"demo/rosto-cadastrado.jpg"}
 
 # As filas não são declaradas: o processador as descobre pelos tópicos que
@@ -73,6 +73,7 @@ ultima_publicacao = {}
 ultimo_heartbeat_recebido = {}
 ultimo_estado_publicado = {}
 leituras = queue.Queue()
+falhou = False
 
 def registrar(fila):
     if fila in entradas:
@@ -90,31 +91,46 @@ def registrar(fila):
 
 def on_message(client, userdata, msg):
     try:
+        if processar_mensagem(client, msg):
+            client.ack(msg.mid, msg.qos)
+    except psycopg.Error as erro:
+        desconectar_sem_confirmar(client, erro)
+
+def desconectar_sem_confirmar(client, erro):
+    global falhou
+    falhou = True
+    print(f"Falha no banco: {erro}. Desconectando sem confirmar as mensagens pendentes.")
+    client.disconnect()
+
+def momento_valido(momento):
+    return isinstance(momento, int) and not isinstance(momento, bool) and 0 < momento < 10**14
+
+def processar_mensagem(client, msg):
+    try:
         payload = json.loads(msg.payload.decode())
     except ValueError:
         print(f"Payload que não é JSON em {msg.topic}: descartado")
-        return
+        return True
     partes = msg.topic.split("/")
     if len(partes) != 3 or partes[0] != "fila" or not isinstance(payload, dict):
-        return
+        return True
     fila, tipo = partes[1], partes[2]
     if payload.get("filaId") != fila or tipo not in {"contagem", "saida", "heartbeat", "leitura"}:
         print(f"Evento inválido em {msg.topic}: tópico e payload divergentes")
-        return
-    if "eventTimeMs" not in payload:
-        print(f"Evento sem eventTimeMs em {msg.topic}")
-        return
+        return True
+    if not momento_valido(payload.get("eventTimeMs")):
+        print(f"Evento sem eventTimeMs válido em {msg.topic}")
+        return True
 
     if tipo == "leitura":
         if not isinstance(payload.get("fotoRef"), str) or not payload.get("eventId"):
             print(f"Leitura sem fotoRef ou eventId em {msg.topic}")
-            return
-        # A deduplicação usa a mesma tabela dos movimentos, sem alterar o saldo.
-        # O Rekognition leva perto de 1 s: roda fora da thread do MQTT para
-        # não atrasar contagens e saídas.
-        if estado_persistente.aplicar(fila, tipo, payload)[0]:
-            leituras.put(payload)
-        return
+            return True
+        novo = estado_persistente.aplicar(fila, tipo, payload)[0]
+        if not novo and estado_persistente.tem_resultado(payload["eventId"]):
+            return True
+        leituras.put((payload, msg))
+        return False
 
     registrar(fila)
 
@@ -122,7 +138,7 @@ def on_message(client, userdata, msg):
         saidas_antes = saidas[fila]
         novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, tipo, payload)
         if not novo:
-            return
+            return True
         if tipo == "saida" and saidas[fila] > saidas_antes:
             instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
@@ -133,11 +149,12 @@ def on_message(client, userdata, msg):
         ultimo_heartbeat_recebido[fila] = time.monotonic()
 
     recomendar_fila(client)
+    return True
 
 def avaliar_rosto(foto_ref):
     return "aceito" if foto_ref in ROSTOS_CADASTRADOS else "recusado"
 
-def avaliar_leitura(client, leitura):
+def avaliar_leitura(client, leitura, msg):
     try:
         resultado = avaliar_rosto(leitura["fotoRef"])
     except Exception as erro:
@@ -151,12 +168,17 @@ def avaliar_leitura(client, leitura):
         "resultado": resultado,
         "eventTimeMs": int(time.time() * 1000),
     }
+    estado_persistente.registrar_resultado(payload)
     client.publish(TOPICO_RESULTADO.format(leitura["filaId"]), json.dumps(payload), qos=1)
+    client.ack(msg.mid, msg.qos)
     print(f"Leitura {leitura['eventId']} na {leitura['filaId']}: {resultado}")
 
 def reconhecimento(client):
     while True:
-        avaliar_leitura(client, leituras.get())
+        try:
+            avaliar_leitura(client, *leituras.get())
+        except psycopg.Error as erro:
+            desconectar_sem_confirmar(client, erro)
 
 def heartbeat_recente(fila, agora_monotonico):
     ultimo = ultimo_heartbeat_recebido[fila]
@@ -313,6 +335,7 @@ def publicar_estado(client, fila, ocupacao, destino, espera):
     resultado = client.publish(TOPICO_ESTADO.format(fila), json.dumps(payload), qos=1, retain=True)
     if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
         ultimo_estado_publicado[fila] = estado
+        estado_persistente.registrar_estado(fila, *estado[:2], estado[3])
 
 def publicar(client, fila, ocupacao, destino, espera, motivo):
     estado = (semaforo[fila], destino)
@@ -375,10 +398,8 @@ def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code != 0:
         print(f"Falha ao autenticar/conectar ao broker MQTT ({reason_code})")
         return
-    client.subscribe(TOPICO_CONTAGEM)
-    client.subscribe(TOPICO_SAIDA)
-    client.subscribe(TOPICO_HEARTBEAT)
-    client.subscribe(TOPICO_LEITURA)
+    client.subscribe([(TOPICO_CONTAGEM, 1), (TOPICO_SAIDA, 1),
+                      (TOPICO_HEARTBEAT, 1), (TOPICO_LEITURA, 1)])
     # Um broker reiniciado perde publicações retidas; republicar após o
     # primeiro heartbeat sem depender de mudança no estado da fila.
     for fila in filas:
@@ -387,7 +408,9 @@ def on_connect(client, userdata, flags, reason_code, properties):
         ultimo_heartbeat_recebido[fila] = None
     print("Conectado ao broker - assinaturas restabelecidas")
 
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="processador",
+                     clean_session=False)
+client.manual_ack_set(True)
 client.on_connect = on_connect
 client.on_message = on_message
 for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
@@ -399,3 +422,5 @@ conectar(client, "processador")
 threading.Thread(target=painel, daemon=True).start()
 threading.Thread(target=reconhecimento, args=(client,), daemon=True).start()
 client.loop_forever()
+if falhou:
+    sys.exit("Processador parado: corrija o banco e inicie de novo; o broker reentrega o pendente.")
