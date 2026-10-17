@@ -36,7 +36,7 @@ class HeartbeatTest(unittest.TestCase):
                  patch.object(mqtt_config, "conectar"), \
                  patch("threading.Thread.start"), \
                  patch("paho.mqtt.client.Client.loop_forever"):
-                modulo = runpy.run_path("consumidor/consumidor.py")
+                modulo = runpy.run_path("processador/processador.py")
 
             cliente = ClienteFalso()
             horario_antigo = int((time.time() - 120) * 1000)

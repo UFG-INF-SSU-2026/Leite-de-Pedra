@@ -15,7 +15,7 @@ flowchart LR
     S["<b>ESP32 sinalizador</b><br/>LCD e LEDs"]
     V["<b>Validador local</b><br/>tickets pelo navegador"]
     B(("Broker MQTT/TLS<br/>mosquitto :8883"))
-    C["<b>Consumidor</b><br/>ocupação, vazão, espera<br/>classifica o semáforo"]
+    C["<b>Processador</b><br/>ocupação, vazão, espera<br/>classifica o semáforo"]
     O["<b>Observador</b><br/>latência e alerta de enlace"]
 
     P -- "fila/{id}/contagem<br/>fila/{id}/heartbeat" --> B
@@ -29,7 +29,7 @@ flowchart LR
 
 1. O **ESP32 de entrada** detecta chegadas pelos HC-SR04 e publica contagem e heartbeat.
 2. A **página local** simula a validação do ticket e publica a saída aprovada.
-3. O **consumidor** mantém o saldo em SQLite, mede a vazão e publica o estado da fila.
+3. O **processador** mantém o saldo em SQLite, mede a vazão e publica o estado da fila.
 4. O **ESP32 sinalizador** recebe o estado e acende LEDs e LCD; o **observador** acompanha todos os eventos.
 
 O Wokwi não executa dois microcontroladores no mesmo projeto. Por isso há
@@ -42,7 +42,7 @@ não por fios entre as placas.
 | `wokwi/src/main.cpp` (`produtor`) | `fila/{id}/contagem`, `fila/{id}/heartbeat` | — |
 | `wokwi/src/sinalizador.cpp` (`sinalizador`) | — | `fila/+/estado` |
 | `validacao/servidor.py` (`validador`) | `fila/{id}/validacao` | `fila/+/estado` |
-| `consumidor/consumidor.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
+| `processador/processador.py` | `fila/{id}/recomendacao`, `fila/{id}/estado` | `fila/+/contagem`, `fila/+/validacao`, `fila/+/heartbeat` |
 | `observador/observador.py` | — | `fila/#` |
 
 Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`. O antigo
@@ -52,12 +52,12 @@ Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`. O antigo
 
 Todos são JSON.
 
-### Telemetria (produtor → consumidor e observador)
+### Telemetria (produtor → processador e observador)
 
 `eventTimeMs` é o instante em que o evento aconteceu (epoch em ms), obtido do
 relógio do ESP32 sincronizado inicialmente por NTP. O ESP32
 atribui `eventId` único às chegadas; o validador também atribui um `eventId`
-à validação. O consumidor ignora eventos repetidos pelo MQTT.
+à validação. O processador ignora eventos repetidos pelo MQTT.
 
 **`fila/{id}/contagem`** — o sensor ultrassônico detectou uma pessoa entrando na fila.
 
@@ -78,7 +78,7 @@ apenas aprovações.
 ```
 
 **`fila/{id}/heartbeat`** — a cada 2 s simulados, por fila. Não entra na
-contagem; só prova que o enlace está vivo. O consumidor mede a atividade pelo
+contagem; só prova que o enlace está vivo. O processador mede a atividade pelo
 instante em que recebe o heartbeat em seu relógio monotônico, com tolerância
 de 15 s reais. O `eventTimeMs` não determina essa atividade: no Wokwi, o
 relógio simulado pode avançar mais devagar que o relógio do computador.
@@ -87,7 +87,7 @@ relógio simulado pode avançar mais devagar que o relógio do computador.
 {"filaId": "fila-a", "tipo": "heartbeat", "eventTimeMs": 1758200014000}
 ```
 
-### Recomendação e estado (consumidor → sinalizador e observador)
+### Recomendação e estado (processador → sinalizador e observador)
 
 **`fila/{id}/recomendacao`** — publicada só quando o par (`semaforo`, `sentidoRecomendado`) muda.
 
@@ -128,7 +128,7 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 |---|---|
 | `produtor` | publica chegadas/heartbeat; o simulador Python legado também lê recomendações |
 | `sinalizador` | somente lê o estado das filas |
-| `consumidor` | lê telemetria e publica recomendações |
+| `processador` | lê telemetria e publica recomendações |
 | `observador` | somente lê `fila/#` |
 | `validador` | publica validações e lê o estado das filas |
 
@@ -170,7 +170,7 @@ Para a demonstração integrada, use quatro terminais na raiz do projeto:
 ```
 mkdir -p .local/logs
 ./scripts/iniciar-broker.sh 2>&1 | tee .local/logs/broker.log                    # terminal 1
-python3 -u consumidor/consumidor.py 2>&1 | tee .local/logs/consumidor.log        # terminal 2
+python3 -u processador/processador.py 2>&1 | tee .local/logs/processador.log        # terminal 2
 python3 -u observador/observador.py 2>&1 | tee .local/logs/observador.log        # terminal 3
 python3 -u validacao/servidor.py 2>&1 | tee .local/logs/validador.log            # terminal 4
 ```
@@ -194,11 +194,11 @@ entrada; só a transição para perto conta. Repita na fila A até haver três
 pessoas: com a estimativa inicial de 7 s por pessoa, ela fica amarela. Cinco
 pessoas a deixam vermelha. Na página, valide um ticket da fila A para registrar
 uma saída; a contagem cai uma unidade. O LCD e os LEDs da segunda simulação
-seguem o estado enviado pelo consumidor. **Não execute `produtor/produtor.py` junto com o Wokwi**:
+seguem o estado enviado pelo processador. **Não execute `produtor/produtor.py` junto com o Wokwi**:
 ele é um simulador alternativo e geraria eventos adicionais.
 
 O SQLite em `.local/filas.sqlite3` preserva a ocupação ao reiniciar o
-consumidor. Para iniciar outro evento real, arquive ou zere esse banco de forma
+processador. Para iniciar outro evento real, arquive ou zere esse banco de forma
 deliberada; o projeto não apaga pessoas da fila automaticamente.
 
 Por padrão, o broker aceita apenas conexões da própria máquina. Para usar outro
@@ -229,7 +229,7 @@ Para ver um **firmware sem a senha** tentando entrar, compile o ambiente
 (que é pública), mas uma senha inventada para o usuário `produtor`. O serial
 mostra `Falha MQTT: ... (retorno 5)` a cada 3 s, e o log do broker registra
 `wokwi-intruso ... disconnected: not authorised`. Nenhuma contagem chega ao
-consumidor.
+processador.
 
 Para testar também a restrição de leitura com o broker em execução:
 
@@ -244,4 +244,4 @@ Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas co
 
 Os entregáveis dos marcos anteriores ficam preservados em pastas próprias:
 [`Marco1/`](Marco1/) (protótipos individuais) e [`Marco2/`](Marco2/)
-(integração produtor → MQTT → consumidor, com seu próprio README).
+(integração produtor → MQTT → processador, com seu próprio README).

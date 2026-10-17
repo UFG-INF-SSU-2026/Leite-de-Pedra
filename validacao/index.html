@@ -42,7 +42,7 @@
     <div class="eyebrow">Leite de Pedra · demonstração local</div>
     <h1>Validação de tickets</h1>
     <p>Abra esta página em <a href="http://localhost:8000" style="color:#9dd0ff">http://localhost:8000</a> com <code>python3 -u validacao/servidor.py</code> em execução. Abrir o HTML diretamente não conecta à API.</p>
-    <p>Aproxime uma pessoa de um sensor no Wokwi para registrar a chegada. Depois valide o ticket aqui para registrar a passagem. O consumidor calcula a ocupação e o estado dos LEDs.</p>
+    <p>Aproxime uma pessoa de um sensor no Wokwi para registrar a chegada. Depois valide o ticket aqui para registrar a passagem. O processador calcula a ocupação e o estado dos LEDs.</p>
     <div class="grid">
       <article data-fila="fila-a"><div class="top"><h2>Fila A</h2><span class="lamp" aria-label="Estado da fila A"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila A</button><p class="meta">Aguardando dados...</p></article>
       <article data-fila="fila-b"><div class="top"><h2>Fila B</h2><span class="lamp" aria-label="Estado da fila B"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><button type="button">Validar ticket da fila B</button><p class="meta">Aguardando dados...</p></article>
@@ -74,7 +74,7 @@
           lamp.className = 'lamp ' + (estado?.semaforo || '');
           card.querySelector('.meta').textContent = estado
             ? `${nomes[estado.semaforo] || 'Sem dados'} · espera ${estado.tempoEsperaEstimado ?? '?'} s · seguir ${estado.sentidoRecomendado}`
-            : 'Aguardando o consumidor publicar o estado';
+            : 'Aguardando o processador publicar o estado';
         }
         aviso.textContent = '';
       } catch {

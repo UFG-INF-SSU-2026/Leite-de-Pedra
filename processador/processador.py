@@ -20,7 +20,7 @@ TOPICO_HEARTBEAT = "fila/+/heartbeat"
 TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
 TOPICO_ESTADO = "fila/{}/estado"
 
-# As filas não são declaradas: o consumidor as descobre pelos tópicos que
+# As filas não são declaradas: o processador as descobre pelos tópicos que
 # chegam. Assim ele não precisa ser reiniciado nem reconfigurado quando o
 # produtor sobe com outra quantidade de filas.
 filas = []
@@ -35,7 +35,7 @@ LIMITE_BLOQUEIO = 30
 MARGEM_HISTERESE = 7
 
 # Este aqui é de rede, não de fila: limite sem heartbeat RECEBIDO pelo
-# consumidor. A folga considera o Wokwi rodando abaixo de 100% da velocidade.
+# processador. A folga considera o Wokwi rodando abaixo de 100% da velocidade.
 VALIDADE_DADOS_SEGUNDOS = 15
 
 # A vazão é medida só sobre as passagens recentes. Sem esse corte, uma fila que
@@ -110,7 +110,7 @@ def on_message(client, userdata, msg):
     elif tipo == "heartbeat":
         banco.inserir(msg.topic, payload)
         # Não entra na contabilidade: só prova que o enlace está vivo quando
-        # não há movimento na fila. Sem ele o consumidor se declararia sem
+        # não há movimento na fila. Sem ele o processador se declararia sem
         # dados em qualquer período calmo, com o enlace perfeito.
         ultimo_heartbeat_recebido[fila] = time.monotonic()
 
@@ -352,6 +352,6 @@ for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
     entradas[fila_salva] = entradas_salvas
     saidas[fila_salva] = saidas_salvas
     print(f"Estado recuperado: {fila_salva}, {ocupacao_de(fila_salva)} pessoa(s)")
-conectar(client, "consumidor")
+conectar(client, "processador")
 threading.Thread(target=painel, daemon=True).start()
 client.loop_forever()

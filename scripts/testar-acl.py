@@ -50,8 +50,8 @@ def iniciar(papel, assinar=False):
 def main():
     clientes = []
     try:
-        consumidor, recebido_consumidor = iniciar("consumidor", assinar=True)
-        clientes.append(consumidor)
+        processador, recebido_processador = iniciar("processador", assinar=True)
+        clientes.append(processador)
         leitor_proibido, recebido_produtor = iniciar("produtor", assinar=True)
         clientes.append(leitor_proibido)
         produtor, _ = iniciar("produtor")
@@ -61,12 +61,12 @@ def main():
         envio.wait_for_publish(timeout=3)
         if not envio.is_published():
             raise RuntimeError("Publicação de teste não foi confirmada")
-        if not recebido_consumidor.wait(3):
-            raise RuntimeError("Consumidor não recebeu a telemetria permitida")
+        if not recebido_processador.wait(3):
+            raise RuntimeError("Processador não recebeu a telemetria permitida")
         time.sleep(0.5)
         if recebido_produtor.is_set():
             raise RuntimeError("Produtor recebeu telemetria sem permissão de leitura")
-        print("ACL de leitura: consumidor recebeu; produtor não recebeu. OK")
+        print("ACL de leitura: processador recebeu; produtor não recebeu. OK")
     finally:
         for client in clientes:
             client.disconnect()

@@ -81,7 +81,7 @@ openssl x509 -req -sha256 -days 825 \
 
 if [[ "$RENOVAR_CERTIFICADOS" -eq 0 ]]; then
     primeiro=1
-    for papel in produtor sinalizador consumidor observador validador; do
+    for papel in produtor sinalizador processador observador validador; do
         senha="$(openssl rand -hex 24)"
         printf '%s\n' "$senha" > "$PASTA_MQTT/$papel.password"
         if [[ "$primeiro" -eq 1 ]]; then

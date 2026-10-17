@@ -8,7 +8,7 @@
 #include <time.h>
 #include "segredos_sinalizador.h"
 
-// ESP32 de saída: apenas recebe o estado publicado pelo consumidor Python.
+// ESP32 de saída: apenas recebe o estado publicado pelo processador Python.
 const char *BROKER = "host.wokwi.internal";
 
 struct FilaSinalizada {

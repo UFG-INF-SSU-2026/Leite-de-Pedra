@@ -25,14 +25,14 @@ PASTA_LOGS = RAIZ / ".local" / "logs"
 # escreve nada); por isso o painel consulta o processo pelo comando.
 TERMINAIS = {
     "broker": "mosquitto -c mosquitto.conf",
-    "consumidor": "consumidor/consumidor.py",
+    "processador": "processador/processador.py",
     "observador": "observador/observador.py",
     "validador": None,  # é este próprio processo
 }
 # Exibido ao lado do nome; "→" indica cliente que só se conecta ao broker.
 PORTAS_TERMINAIS = {
     "broker": "8883",
-    "consumidor": "→ 8883",
+    "processador": "→ 8883",
     "observador": "→ 8883",
     "validador": "8000",
 }

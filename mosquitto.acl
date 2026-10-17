@@ -1,4 +1,4 @@
-# Produtor: envia somente telemetria e recebe a decisão do consumidor.
+# Produtor: envia somente telemetria e recebe a decisão do processador.
 user produtor
 topic write fila/+/contagem
 topic write fila/+/heartbeat
@@ -8,8 +8,8 @@ topic read fila/+/recomendacao
 user sinalizador
 topic read fila/+/estado
 
-# Consumidor: recebe a telemetria e é o único que emite recomendações.
-user consumidor
+# Processador: recebe a telemetria e é o único que emite recomendações.
+user processador
 topic read fila/+/contagem
 topic read fila/+/validacao
 topic read fila/+/heartbeat

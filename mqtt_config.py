@@ -7,7 +7,7 @@ from pathlib import Path
 
 RAIZ_PROJETO = Path(__file__).resolve().parent
 PASTA_SEGREDOS_PADRAO = RAIZ_PROJETO / ".local" / "mqtt"
-PAPEIS = {"produtor", "sinalizador", "consumidor", "observador", "validador"}
+PAPEIS = {"produtor", "sinalizador", "processador", "observador", "validador"}
 
 
 def _senha_de(papel):
