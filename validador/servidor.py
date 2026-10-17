@@ -46,7 +46,7 @@ LINHAS = 200
 PAGINAS = {
     "/": Path(__file__).parent / "index.html",
     # Mesma origem da API: a apresentação lê os logs sem precisar liberar CORS.
-    "/apresentacao": RAIZ / "apresentacao-seguranca.html",
+    "/apresentacao": RAIZ / "entregas" / "Marco3" / "apresentacao-seguranca.html",
 }
 
 estados = {}

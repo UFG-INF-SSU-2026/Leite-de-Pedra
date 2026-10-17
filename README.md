@@ -7,6 +7,22 @@ estima o tempo de espera e sinaliza num semáforo (verde, amarelo, vermelho)
 qual fila procurar, para que um pico de chegada se distribua em vez de
 empilhar numa fila só.
 
+## Estrutura do repositório
+
+| Pasta | O que é |
+|---|---|
+| [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 de entrada com os sensores (`src/main.cpp`), o sinalizador com LCD e LEDs (`src/sinalizador.cpp`, circuito em `sinalizador/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware, e `simulador.py`, que gera eventos sem o Wokwi. |
+| [`validador/`](validador/) | Validação de tickets pelo operador. Hoje é uma página local (`index.html`) servida por `servidor.py`; será substituída pela aplicação mobile. |
+| [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
+| [`processador/`](processador/) | Serviço que consome contagens e validações, calcula ocupação, vazão e espera e publica o estado de cada fila. |
+| [`observador/`](observador/) | Acompanha todos os tópicos, mede latência e alerta queda de enlace. Hoje roda no terminal; será o painel web de visualização. |
+| [`tests/`](tests/) | Testes automatizados (`python3 -m unittest discover -s tests`). |
+| [`entregas/`](entregas/) | Entregas da disciplina; ver [Entregas](#entregas). |
+
+Na raiz ficam os módulos Python compartilhados: `mqtt_config.py` (conexão
+TLS autenticada usada por todos os clientes), `estado_filas.py` (saldo das
+filas em SQLite) e `banco.py` (registro de eventos em JSON).
+
 ## Fluxo
 
 ```mermaid
@@ -240,8 +256,12 @@ python3 broker/testar-acl.py
 Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas com
 `./broker/configurar-seguranca.sh --renovar-certificados` e reinicie o broker.
 
-## Marcos anteriores
+## Entregas
 
-Os entregáveis dos marcos anteriores ficam preservados em pastas próprias:
-[`Marco1/`](Marco1/) (protótipos individuais) e [`Marco2/`](Marco2/)
-(integração produtor → MQTT → processador, com seu próprio README).
+| Entrega | Conteúdo |
+|---|---|
+| [`entregas/Marco1/atividade-01.md`](entregas/Marco1/atividade-01.md) | Atividade em Grupo 01: análise inicial do sistema ubíquo e do cenário escolhido. |
+| [`entregas/Marco2/atividade-02.md`](entregas/Marco2/atividade-02.md) | Atividade em Grupo 02: eventos do sistema e distribuição de responsabilidades. |
+| [`entregas/Marco1/`](entregas/Marco1/) | Protótipos individuais no Wokwi, um por integrante, com relatório e evidências dos testes. |
+| [`entregas/Marco2/`](entregas/Marco2/) | Primeira integração produtor → MQTT → processador, com README e roteiro de demonstração próprios. |
+| [`entregas/Marco3/`](entregas/Marco3/) | Apresentação de segurança (TLS, autenticação e ACL), servida em `http://localhost:8000/apresentacao` pelo validador. O código do Marco 3 é o próprio repositório. |
