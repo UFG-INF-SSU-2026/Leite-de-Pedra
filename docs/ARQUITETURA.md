@@ -18,7 +18,7 @@ Toda a comunicação passa por um broker MQTT (Mosquitto) com TLS, autenticaçã
 por senha e ACL por componente.
 
 > **Todo componente, atual ou futuro, segue as mesmas regras de segurança.**
-> Isso inclui o app mobile, o painel web, o TimescaleDB e a integração com
+> Isso inclui o app mobile, o painel web, o banco TimescaleDB e a integração com
 > AWS Rekognition e S3. Nenhum componente entra no sistema sem cumprir as
 > [regras obrigatórias](#regras-obrigatórias-de-segurança) descritas abaixo.
 
@@ -31,7 +31,7 @@ por senha e ACL por componente.
 | **Broker** | `broker/` (Mosquitto) | Entrega as mensagens entre os componentes, com TLS e ACL. |
 | **Processador** | `processador/processador.py` | Único que decide: calcula ocupação, vazão e espera e avalia cada leitura facial. |
 | **Consumidor** | `produtor/src/consumidor.cpp` (ESP32 no Wokwi) | LCD e LEDs que indicam ao público qual fila procurar. |
-| **Observador** | `observador/` (hoje terminal; futuro painel web) | Visualiza movimentos, resultados e estados. Nunca recebe biometria. |
+| **Observador** | `observador/painel/` (painel web) | Visualiza movimentos, resultados e estados. Nunca recebe biometria. |
 | **AWS Rekognition** | serviço externo | Compara o rosto lido com a coleção de rostos cadastrados. |
 
 ```mermaid
@@ -46,7 +46,7 @@ flowchart LR
 
     subgraph Servidor["Lado servidor"]
         C["<b>Processador</b><br/>ocupação, vazão, espera<br/>decisão facial"]
-        DB[("SQLite<br/>(futuro TimescaleDB)")]
+        DB[("TimescaleDB")]
         R[["AWS Rekognition"]]
     end
 
@@ -91,7 +91,7 @@ sequenceDiagram
     participant P as Produtor (ESP32)
     participant B as Broker
     participant C as Processador
-    participant DB as SQLite
+    participant DB as TimescaleDB
     participant S as Consumidor (LEDs)
     participant O as Observador
 
@@ -99,7 +99,7 @@ sequenceDiagram
     P->>B: fila/fila-a/contagem {eventId}
     B->>C: contagem
     B->>O: contagem
-    C->>DB: INSERT OR IGNORE movimento<br/>entradas + 1
+    C->>DB: grava movimento (ON CONFLICT DO NOTHING)<br/>entradas + 1
     C->>C: recalcula espera e semáforo
     C->>B: fila/fila-a/estado (retain)
     B->>S: estado
@@ -109,7 +109,7 @@ sequenceDiagram
     P->>B: fila/fila-a/saida {eventId}
     B->>C: saida
     B->>O: saida
-    C->>DB: INSERT OR IGNORE movimento<br/>saídas + 1
+    C->>DB: grava movimento (ON CONFLICT DO NOTHING)<br/>saídas + 1
     C->>C: registra a passagem para medir a vazão
     C->>B: fila/fila-a/estado (retain)
     B->>S: estado
@@ -200,8 +200,7 @@ Cada próximo passo da tabela abaixo só é concluído quando cumpre as
 | Foto | o validador envia uma referência fixa de demonstração | o app envia a foto ao S3 e publica a chave |
 | Cadastro de rostos | não existe | `IndexFaces` de cada portador de ingresso (por exemplo, na compra) |
 | Validador | página local `validador/index.html` | app mobile com credencial MQTT própria (MQTT sobre WebSockets, se for híbrido) |
-| Observador | terminal | painel web lendo o histórico do banco |
-| Persistência | SQLite em `.local/filas.sqlite3` | TimescaleDB (ver abaixo) |
+| Observador | painel web (`observador/painel/`) com login: ao vivo pelo broker com atualização contínua (SSE), histórico por minuto do banco | — |
 
 ## Segurança e permissões
 
@@ -219,7 +218,7 @@ desligada para facilitar um teste ou uma demonstração.
 | 3 | **Menor privilégio.** Cada identidade só publica e só lê os tópicos de que precisa. Um papel novo começa sem permissão e ganha só o necessário. | `broker/mosquitto.acl`, testado por `broker/testar-acl.py`. |
 | 4 | **Segredo fora do Git.** Senhas, chaves, certificados e credenciais de nuvem nunca são versionados. | `.local/` e `produtor/include/segredos*.h` estão no `.gitignore`; cada firmware recebe só a senha do seu papel. |
 | 5 | **Desconfiar do que chega.** Todo dado recebido é validado: tópico e `filaId` coincidem, o tipo é conhecido, o tamanho é limitado e payload malformado é descartado sem derrubar o serviço. | Validações no processador, no observador e no servidor do validador (POST limitado a 1 KB). |
-| 6 | **Idempotência.** Todo evento tem `eventId`, e repetições são ignoradas. | `INSERT OR IGNORE` em `estado_filas.py`. |
+| 6 | **Idempotência.** Todo evento tem `eventId`, e repetições são ignoradas. | `ON CONFLICT DO NOTHING` em `estado_filas.py`. |
 | 7 | **Uma única autoridade.** Só o processador publica estado, recomendação e resultado; quem envia dados não decide sobre eles. | ACL: só o `processador` escreve em `estado`, `recomendacao` e `resultado`. |
 | 8 | **Biometria mínima.** A foto nunca passa pelo broker nem é gravada fora do bucket; só a referência circula, e só o processador a lê. | ACL: só o `processador` lê `fila/+/leitura`; o observador não recebe leituras. |
 
@@ -228,8 +227,8 @@ desligada para facilitar um teste ou uma demonstração.
 | Componente | O que ele precisa ter |
 |---|---|
 | **App mobile (validador)** | Usuário MQTT `validador` com senha própria por aparelho ou por operador; TLS validando a CA (inclusive em MQTT sobre WebSockets, que precisa de `listener` com TLS no Mosquitto); nenhuma credencial AWS no aparelho, só URLs pré-assinadas de upload e de curta duração; nenhuma foto guardada no celular depois do envio. |
-| **Painel web (observador)** | Usuário `observador`, somente leitura e sem acesso a `fila/+/leitura`; login para quem acessa o painel; HTTPS; credenciais MQTT e do banco só no servidor, nunca no navegador. |
-| **TimescaleDB** | Conexão com TLS obrigatório (`sslmode=verify-full`); um usuário de escrita só para o processador e um usuário somente leitura para o painel; senha fora do Git; banco sem porta exposta à internet. |
+| **Painel web (observador)** (implementado) | Usuário MQTT `observador` e papel `observador` do banco, ambos somente leitura e sem acesso a `fila/+/leitura`; recebe os dados ao vivo pelo broker e só o histórico do banco; descarta mensagem malformada ou com `filaId` diferente do tópico; login com senha em hash scrypt e sessão JWT HS256 de 1 h em cookie `HttpOnly`, `Secure` e `SameSite=Strict` (algoritmo fixo, `none` recusado); HTTPS com TLS 1.2 ou superior e certificado da CA do projeto, só em `127.0.0.1:8443`; CSP que só aceita o próprio script e a própria origem e templates Jinja2 com escape automático; credenciais do broker e do banco só no servidor, nunca no navegador. |
+| **TimescaleDB** (implementado) | Conexão com TLS obrigatório (`sslmode=verify-full`); um usuário de escrita só para o processador e um usuário somente leitura para o painel; senha fora do Git; banco sem porta exposta à internet. Detalhes em [Persistência com TimescaleDB](#persistência-com-timescaledb). |
 | **AWS Rekognition e S3** | Credenciais só no processador, com uma política IAM que permita apenas `SearchFacesByImage` na coleção do evento e leitura e exclusão no bucket das fotos; bucket privado e cifrado; fotos apagadas logo após a avaliação; nenhuma chave da AWS no Git nem no app. |
 
 ### Permissões no broker
@@ -280,26 +279,114 @@ flowchart LR
 | `consumidor` | nada | estado | criar movimentos |
 | `observador` | nada | tudo, menos leitura | escrever, ver biometria |
 
-## Persistência futura com TimescaleDB
+## Persistência com TimescaleDB
 
-O TimescaleDB entra **no processador**, no lugar do SQLite de
-`estado_filas.py`. Ele é o único componente que já deduplica e valida os
-eventos; um serviço separado que assinasse os tópicos gravaria mensagens
-repetidas ou forjadas.
+O TimescaleDB fica **no processador**: só ele grava. Ele é o único componente
+que valida e deduplica os eventos; um serviço separado que assinasse os
+tópicos gravaria mensagens repetidas ou forjadas. A configuração está em
+`banco/` e o acesso em `estado_filas.py`.
 
 ```mermaid
 flowchart LR
     B(("Broker")) --> C["Processador<br/>valida e deduplica"]
-    C --> T[("TimescaleDB<br/>hypertable movimentos")]
-    T --> AG["continuous aggregates<br/>espera e vazão por minuto"]
-    AG --> O["Observador<br/>painel web"]
+    C -- "TLS verify-full<br/>papel processador" --> T[("TimescaleDB<br/>127.0.0.1:5433")]
+    T --> AG["continuous aggregates<br/>por minuto"]
+    AG -- "histórico por minuto<br/>TLS verify-full, papel observador" --> O["Observador<br/>painel web"]
+    B -- "ao vivo<br/>MQTT/TLS, usuário observador" --> O
+    V["Validador"] -. "sem acesso ao banco<br/>(usa o estado do MQTT)" .-x T
 ```
 
-- `movimentos` vira uma hypertable particionada por `eventTimeMs`, com
-  contagens, saídas e resultados das leituras.
-- A ocupação passa a ser uma consulta (entradas − saídas por fila).
-- O painel web lê o histórico e os agregados direto do banco; o MQTT continua
-  servindo o tempo real.
-- A conexão com o banco segue as [regras obrigatórias](#regras-obrigatórias-de-segurança):
-  TLS com verificação do certificado, um usuário de escrita só para o processador,
-  um usuário somente leitura para o painel e senhas fora do Git.
+### Esquema
+
+```mermaid
+erDiagram
+    filas {
+        TEXT fila_id PK
+        INTEGER entradas
+        INTEGER saidas
+    }
+    movimentos {
+        TEXT evento_id PK
+        TEXT tipo PK "contagem, saida, leitura, resultado"
+        TIMESTAMPTZ momento PK "hypertable"
+        TEXT fila_id
+        TIMESTAMPTZ recebido_em
+        TEXT resultado "aceito, recusado, indeterminado"
+    }
+    estados {
+        TIMESTAMPTZ momento "hypertable"
+        TEXT fila_id
+        TEXT semaforo
+        INTEGER ocupacao
+        INTEGER espera_segundos
+    }
+    filas ||--o{ movimentos : "fila_id"
+    filas ||--o{ estados : "fila_id"
+```
+
+| Objeto | Tipo | Conteúdo |
+|---|---|---|
+| `filas` | tabela | saldo de entradas e saídas por fila. Fica separado para que uma saída a mais com a fila vazia não deixe a ocupação negativa. |
+| `movimentos` | hypertable por `momento` | todo evento aceito. A chave `(evento_id, tipo, momento)` descarta as reentregas do QoS 1. A leitura guarda só o `eventId`, **nunca a referência da foto**. |
+| `estados` | hypertable por `momento` | cada estado publicado: semáforo, ocupação e espera estimada. |
+| `movimentos_por_minuto` | continuous aggregate | entradas, saídas, aceitos, recusados e indeterminados por fila e minuto (vazão). |
+| `espera_por_minuto` | continuous aggregate | espera média e máxima e ocupação máxima por fila e minuto. |
+
+Os agregados são atualizados a cada minuto e incluem os dados ainda não
+materializados, então o painel vê também o minuto corrente.
+
+### Entrega garantida até o banco
+
+Todo dado chega ao processador pelos tópicos do broker. Nenhuma mensagem se
+perde se o processador ou o banco caírem:
+
+- O processador assina `contagem`, `saida`, `heartbeat` e `leitura` com QoS 1,
+  numa sessão persistente (`clean_session=False`). O broker guarda em disco
+  (`.local/mosquitto/`) o que chega enquanto o processador está fora do ar.
+- A confirmação ao broker (PUBACK) é manual. Ela só é enviada depois que o
+  evento foi gravado no banco. Para a leitura facial, só depois que o
+  resultado foi gravado e publicado.
+- Se o banco falhar, o processador se desconecta sem confirmar e encerra.
+  Quando ele é iniciado de novo, o broker reentrega as mensagens pendentes, e
+  a chave de `movimentos` descarta as que já tinham sido gravadas.
+- O broker usa o usuário como client id (`use_username_as_clientid`). Assim,
+  outro papel não consegue assumir a sessão do processador nem ler as leituras
+  guardadas para ele.
+
+```mermaid
+sequenceDiagram
+    participant P as Produtor
+    participant B as Broker
+    participant C as Processador
+    participant T as TimescaleDB
+    P->>B: contagem (QoS 1)
+    B->>C: contagem
+    C->>T: INSERT ... ON CONFLICT DO NOTHING
+    T-->>C: ok
+    C->>B: PUBACK
+    Note over C,T: banco fora do ar
+    B->>C: contagem
+    C-xT: falha
+    C->>B: desconecta sem PUBACK
+    Note over B: guarda a mensagem
+    C->>B: reconecta (mesma sessão)
+    B->>C: reentrega a contagem
+```
+
+### Segurança do banco
+
+O banco cumpre as [regras obrigatórias](#regras-obrigatórias-de-segurança):
+
+| Regra | Como o banco cumpre |
+|---|---|
+| Só TLS | `pg_hba.conf` só tem linhas `hostssl`; TLS 1.2 ou superior; os clientes usam `sslmode=verify-full` com a CA do projeto. |
+| Uma identidade por componente | papéis `processador` e `observador`, com senha SCRAM própria; o superusuário `postgres` só entra pelo socket local do contêiner. |
+| Menor privilégio | `processador` lê, insere e atualiza, mas não apaga, não faz `TRUNCATE` e não cria tabelas; `observador` só lê. |
+| Segredo fora do Git | senhas, certificado e chave em `.local/banco`, gerados por `banco/configurar-banco.sh`. |
+| Desconfiar do que chega | o processador valida tópico, tipo e `eventTimeMs` antes de gravar; o esquema tem `CHECK` em `tipo`, `resultado` e `semaforo`. |
+| Idempotência | `ON CONFLICT DO NOTHING` na chave de `movimentos`. |
+| Biometria mínima | nenhuma tabela guarda foto nem referência de foto. |
+| Rede | porta publicada só em `127.0.0.1:5433`; telemetria do TimescaleDB desligada. |
+
+Os testes rodam no banco `filas_teste`, que tem o mesmo esquema; só nele o
+`processador` pode fazer `TRUNCATE`.

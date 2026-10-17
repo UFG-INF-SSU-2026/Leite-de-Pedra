@@ -311,7 +311,7 @@ mqtt.connect("wokwi-sensores", "produtor", MQTT_SENHA);</pre>
         <li>Confere se o <code>filaId</code> do payload é igual à fila do tópico.</li>
         <li>Só aceita os tipos <code>contagem</code>, <code>saida</code>, <code>heartbeat</code> e <code>leitura</code>, e descarta payloads que não são JSON em vez de cair.</li>
         <li>Só ele decide o resultado do reconhecimento facial: o validador envia a leitura, mas não pode publicar o resultado.</li>
-        <li>Descarta eventos repetidos pelo <code>eventId</code>, com <code>INSERT OR IGNORE</code> no SQLite. Assim, uma reentrega do QoS 1 não conta a mesma pessoa duas vezes.</li>
+        <li>Descarta eventos repetidos pelo <code>eventId</code>, com <code>ON CONFLICT DO NOTHING</code> no TimescaleDB. Assim, uma reentrega do QoS 1 não conta a mesma pessoa duas vezes.</li>
         <li>Decide se o enlace está vivo pelo <strong>relógio do próprio processador</strong>, nunca pelo horário que o dispositivo informa.</li>
       </ul>
     </div>
@@ -386,7 +386,7 @@ Client ... negotiated <span class="k">TLSv1.2</span>
   <div class="grid">
     <div class="card alerta"><h3>CA de desenvolvimento</h3><p>A CA é autoassinada e só faz sentido na demonstração. Em produção, o certificado precisa vir de uma CA gerenciada, com renovação automática.</p></div>
     <div class="card alerta"><h3>Senha dentro do firmware</h3><p>Quem tiver acesso físico ao ESP32 consegue ler a flash. A evolução é usar a criptografia de flash do ESP32 ou certificado de cliente (mTLS).</p></div>
-    <div class="card alerta"><h3>Dados em repouso</h3><p>O SQLite não é cifrado; o TLS protege só o trânsito.</p></div>
+    <div class="card alerta"><h3>Dados em repouso</h3><p>O volume do banco não é cifrado; o TLS protege só o trânsito.</p></div>
     <div class="card alerta"><h3>Payload malformado</h3><p>O processador não trata JSON inválido vindo de um cliente autenticado. A ACL limita quem pode publicar, mas falta um <code>try</code> no parser.</p></div>
     <div class="card alerta"><h3>Broker apenas local</h3><p>Para levar o broker a outro host, é preciso emitir um certificado com o novo nome e abrir o listener, sem nunca desligar a verificação TLS.</p></div>
   </div>
