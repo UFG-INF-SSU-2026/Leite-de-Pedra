@@ -31,7 +31,8 @@ por senha e ACL por componente.
 | **Broker** | `broker/` (Mosquitto) | Entrega as mensagens entre os componentes, com TLS e ACL. |
 | **Processador** | `processador/processador.py` | Único que decide: calcula ocupação, vazão e espera e avalia cada leitura facial. |
 | **Consumidor** | `produtor/src/consumidor.cpp` (ESP32 no Wokwi) | LCD e LEDs que indicam ao público qual fila procurar. |
-| **Observador** | `observador/painel/` (painel web) | Visualiza movimentos, resultados e estados. Nunca recebe biometria. |
+| **Observabilidade** | `observabilidade/` | Assina tudo no broker (usuário `observador`) e monta a situação ao vivo: filas, tentativas de leitura sem a referência da foto, resultados, reações, presença dos componentes e rejeitadas. Lê o histórico do banco com o papel `observador`, só de leitura. Não grava nada e não autentica ninguém: serve a API interna (`/ao-vivo`, `/resumo`, `/historico`, `/leituras`, `/movimentos`, `/estados`) só na rede interna. |
+| **Dashboard de admin** | `admin/` (SPA React) + `backend/admin.py` | Mostra o ao vivo e o histórico operacional (lidos da observabilidade, com a permissão de admin conferida pelo backend) e, pela gestão no banco (papel `painel`), troca papéis e cancela ingressos, com auditoria. A foto de uma leitura só abre por link temporário, e cada abertura fica registrada. |
 | **AWS Rekognition** | serviço externo | Compara o rosto lido com a coleção de rostos cadastrados. |
 
 ```mermaid
@@ -45,18 +46,18 @@ flowchart LR
     B(("<b>Broker</b><br/>Mosquitto<br/>MQTT/TLS :8883"))
 
     subgraph Servidor["Lado servidor"]
-        C["<b>Processador</b><br/>ocupação, vazão, espera<br/>decisão facial"]
+        C["<b>Processador</b><br/>ocupação, vazão, espera<br/>regras do ingresso"]
         DB[("TimescaleDB")]
         R[["AWS Rekognition"]]
     end
 
-    O["<b>Observador</b><br/>painel web"]
+    O["<b>Observabilidade</b><br/>ao vivo, sem gravar"]
 
     P -- "contagem · saida · heartbeat" --> B
     V -- "leitura" --> B
     B -- "contagem · saida · heartbeat · leitura" --> C
     C --- DB
-    C <-. "SearchFacesByImage" .-> R
+    V <-. "SearchFacesByImage (pelo backend)" .-> R
     C -- "resultado · estado · recomendacao" --> B
     B -- "estado" --> S
     B -- "resultado · estado" --> V
@@ -66,18 +67,50 @@ flowchart LR
 ## Tópicos MQTT
 
 O MQTT não tem filas, tem **tópicos**: o broker entrega cada mensagem a quem
-assina o tópico, sem guardá-la em fila. Todos os tópicos seguem
-`fila/{id}/{tipo}`, com `{id}` igual a `fila-a`, `fila-b` etc.
+assina o tópico, sem guardá-la em fila. Os tópicos das filas seguem
+`fila/{id}/{tipo}`, com `{id}` igual a `fila-a`, `fila-b` etc.; a presença de
+cada componente fica em `sistema/{usuario}/status`.
 
 | Tópico | Publica | Assina | Conteúdo |
 |---|---|---|---|
-| `fila/{id}/contagem` | produtor | processador, observador | uma pessoa entrou na fila |
-| `fila/{id}/saida` | produtor | processador, observador | uma pessoa saiu da fila |
-| `fila/{id}/heartbeat` | produtor | processador, observador | o enlace do ESP32 está vivo (a cada 2 s) |
+| `fila/{id}/contagem` | produtor | processador, observabilidade | uma pessoa entrou na fila |
+| `fila/{id}/saida` | produtor | processador, observabilidade | uma pessoa saiu da fila |
+| `fila/{id}/heartbeat` | produtor | processador, observabilidade | o enlace do ESP32 está vivo (a cada 2 s) |
 | `fila/{id}/leitura` | validador | **só** processador | referência da foto capturada na catraca |
-| `fila/{id}/resultado` | processador | validador, observador | `aceito`, `recusado` ou `indeterminado` |
-| `fila/{id}/estado` | processador | consumidor, validador, observador | semáforo, ocupação, espera e fila recomendada (retido) |
-| `fila/{id}/recomendacao` | processador | observador | mudança de recomendação, com o motivo |
+| `fila/{id}/resultado` | processador | backend, consumidor, validador, observabilidade | `aceito`, `recusado` ou `indeterminado` |
+| `fila/{id}/estado` | processador | consumidor, validador, observabilidade | semáforo, ocupação, espera e fila recomendada (retido) |
+| `fila/{id}/recomendacao` | processador | observabilidade | mudança de recomendação, com o motivo |
+| `fila/{id}/reacao` | consumidor | observabilidade | a reação que o ESP32 executou para um `resultado` (`liberar`, `decidir-manual` ou `barrar`), com o `correlation_id` da leitura |
+| `sistema/{usuario}/status` | cada componente (o próprio) | observabilidade | `online` ao conectar; `offline` pelo Last Will ou ao sair (retido) |
+| `sistema/processador/rejeitado` | processador | observabilidade | mensagem descartada e o motivo: `fora-do-contrato`, `tipo-desconhecido`, `leitura-incompleta` ou `duplicado` |
+
+### Contrato das mensagens
+
+Toda mensagem, em todos os tópicos, é um JSON com este envelope
+(`mqtt_config.evento` monta, `mqtt_config.ler_evento` valida):
+
+```json
+{
+  "event_id": "3f9a1c-42",
+  "correlation_id": "3f9a1c-42",
+  "event_type": "contagem",
+  "source": "produtor",
+  "timestamp": 1730851200000,
+  "payload": { "filaId": "fila-a", "sequence": 42 }
+}
+```
+
+| Campo | Regra |
+|---|---|
+| `event_id` | único por evento, até 128 caracteres; é a chave de idempotência do processador. O resultado de uma leitura usa `{event_id da leitura}-resultado`, então a resposta repetida numa reentrega é o mesmo evento. |
+| `correlation_id` | a operação de ponta a ponta. Quem abre a operação (o ESP32 num movimento, o backend numa leitura) gera um; todo evento derivado repete o dele. Gravado em `movimentos.correlacao_id`. |
+| `event_type` | igual ao último nível do tópico. |
+| `source` | o usuário MQTT de quem publicou (o broker usa o usuário como client id). Gravado em `movimentos.origem`. |
+| `timestamp` | milissegundos desde 1970 (UTC), no momento em que o evento ocorreu na origem. No Last Will é o da conexão que o registrou. |
+| `payload` | objeto com os dados do tipo. Em `fila/{id}/…`, `payload.filaId` é igual a `{id}`; em `sistema/{usuario}/…`, `source` é igual a `{usuario}`. |
+
+Mensagem fora do contrato, ou que não combina com o tópico, é descartada (e
+confirmada ao broker, para não voltar).
 
 ## Fluxo 1 — contagem de pessoas e estimativa de espera
 
@@ -96,7 +129,7 @@ sequenceDiagram
     participant O as Observador
 
     Note over P: pessoa passa pelo sensor de entrada
-    P->>B: fila/fila-a/contagem {eventId}
+    P->>B: fila/fila-a/contagem {event_id}
     B->>C: contagem
     B->>O: contagem
     C->>DB: grava movimento (ON CONFLICT DO NOTHING)<br/>entradas + 1
@@ -106,7 +139,7 @@ sequenceDiagram
     S->>S: acende LED e mostra fila recomendada
 
     Note over P: pessoa passa pelo sensor de saída
-    P->>B: fila/fila-a/saida {eventId}
+    P->>B: fila/fila-a/saida {event_id}
     B->>C: saida
     B->>O: saida
     C->>DB: grava movimento (ON CONFLICT DO NOTHING)<br/>saídas + 1
@@ -147,22 +180,24 @@ sequenceDiagram
     autonumber
     actor Pessoa
     participant V as Validador (app)
+    participant K as Backend
+    participant R as AWS Rekognition
     participant S3 as Bucket (S3)
     participant B as Broker
     participant C as Processador
-    participant R as AWS Rekognition
     participant O as Observador
 
     Pessoa->>V: olha para a câmera
-    V->>S3: envia a foto (URL pré-assinada)
-    V->>B: fila/fila-a/leitura {eventId, fotoRef}
+    V->>K: POST /leituras {ingressoId, filaId, foto}
+    K->>R: SearchFacesByImage(coleção, foto)
+    R-->>K: usuário reconhecido (ou nenhum, ou falha)
+    K->>S3: guarda a foto (auditoria, 1 dia)
+    K->>B: fila/fila-a/leitura {event_id, correlation_id, reconhecimento}
     B->>C: leitura (só o processador pode ler)
-    C->>C: descarta se o eventId já foi visto
-    C->>C: coloca na fila de trabalho
-    C->>R: SearchFacesByImage(coleção, fotoRef)
-    R-->>C: rosto correspondente e similaridade
-    C->>B: fila/fila-a/resultado {eventId, resultado}
-    B->>V: resultado
+    C->>C: validador? dono do ingresso? já usado?
+    C->>B: fila/fila-a/resultado {correlation_id, resultado}
+    B->>K: resultado
+    K-->>V: resultado
     B->>O: resultado
     alt aceito
         V->>Pessoa: libera a catraca
@@ -178,14 +213,16 @@ Decisões deste fluxo:
 - **A foto não passa pelo broker.** Biometria é dado pessoal sensível (LGPD).
   A leitura leva só a referência (`fotoRef`) da imagem no bucket, e a ACL
   impede que qualquer outro componente leia `fila/+/leitura`.
-- **Quem decide é o processador.** As credenciais da AWS ficam só no servidor,
-  nunca no celular, e o validador não consegue publicar um `resultado`.
-- **O `eventId` liga a resposta à pergunta.** O `resultado` repete o
-  `eventId` da `leitura`, então cada aparelho reconhece a resposta à sua
-  leitura mesmo com vários validadores na mesma fila.
-- **O reconhecimento roda fora da thread do MQTT.** O Rekognition leva perto
-  de 1 s; uma thread de trabalho evita que contagens e saídas fiquem paradas
-  esperando.
+- **O backend reconhece, o processador decide.** As credenciais da AWS ficam
+  só no backend, nunca no celular nem no processador. O processador confia no
+  `usuarioReconhecido` da leitura porque, pela ACL, só o backend publica em
+  `fila/+/leitura`; e só ele publica `resultado`.
+- **O `correlation_id` liga a resposta à pergunta.** O `resultado` repete o
+  `correlation_id` da `leitura`, então o backend entrega cada resposta à
+  catraca certa mesmo com vários validadores na mesma fila.
+- **Sem AWS no caminho do MQTT.** O Rekognition leva perto de 1 s e roda na
+  requisição HTTP do backend; o processador decide a leitura só com o banco,
+  na própria thread do MQTT, sem segurar contagens e saídas.
 - **Falha não trava a fila.** Se o Rekognition não responder, o resultado é
   `indeterminado` e o operador decide.
 
@@ -196,11 +233,11 @@ Cada próximo passo da tabela abaixo só é concluído quando cumpre as
 
 | Parte | Hoje | Próximo passo |
 |---|---|---|
-| Reconhecimento | `avaliar_rosto` no processador simula o Rekognition: aceita só `demo/rosto-cadastrado.jpg` | trocar pela chamada `SearchFacesByImage` com a coleção real |
-| Foto | o validador envia uma referência fixa de demonstração | o app envia a foto ao S3 e publica a chave |
-| Cadastro de rostos | não existe | `IndexFaces` de cada portador de ingresso (por exemplo, na compra) |
-| Validador | página local `validador/index.html` | app mobile com credencial MQTT própria (MQTT sobre WebSockets, se for híbrido) |
-| Observador | painel web (`observador/painel/`) com login: ao vivo pelo broker com atualização contínua (SSE), histórico por minuto do banco | — |
+| Reconhecimento | o backend chama `SearchFacesByImage` (95%) e publica o usuário reconhecido; o processador confere o papel do validador no banco e se o rosto é do dono do ingresso, e marca o ingresso na mesma transação do resultado | — |
+| Foto | o backend recebe a foto do app e a guarda em `leituras/` no S3 (apagada em 1 dia pela regra do bucket) | apagar logo após a avaliação |
+| Usuários e ingressos | `backend/` (FastAPI): cadastro com login, senha e rosto, compra de ingressos, sessão JWT; papéis `validador` e `admin` definidos por um admin no dashboard (o primeiro por `banco/definir-papel.sh`) | pagamento e eventos |
+| Validador | app em `mobile/` (só a tela inicial); fala com o backend por HTTPS, sem credencial MQTT ou AWS no aparelho. A página `validador/` virou console da demo | telas de login, QR e câmera |
+| Dashboard | SPA React em `admin/`, servida pelo backend em `/painel/`; API `/admin/*` com o papel admin conferido a cada requisição: o operacional repassado da observabilidade (papel `observador`), a gestão com o papel `painel` | gráficos do histórico |
 
 ## Segurança e permissões
 
@@ -218,9 +255,9 @@ desligada para facilitar um teste ou uma demonstração.
 | 3 | **Menor privilégio.** Cada identidade só publica e só lê os tópicos de que precisa. Um papel novo começa sem permissão e ganha só o necessário. | `broker/mosquitto.acl`, testado por `broker/testar-acl.py`. |
 | 4 | **Segredo fora do Git.** Senhas, chaves, certificados e credenciais de nuvem nunca são versionados. | `.local/` e `produtor/include/segredos*.h` estão no `.gitignore`; cada firmware recebe só a senha do seu papel. |
 | 5 | **Desconfiar do que chega.** Todo dado recebido é validado: tópico e `filaId` coincidem, o tipo é conhecido, o tamanho é limitado e payload malformado é descartado sem derrubar o serviço. | Validações no processador, no observador e no servidor do validador (POST limitado a 1 KB). |
-| 6 | **Idempotência.** Todo evento tem `eventId`, e repetições são ignoradas. | `ON CONFLICT DO NOTHING` em `estado_filas.py`. |
+| 6 | **Idempotência.** Todo evento tem `event_id`, e repetições são ignoradas. | `ON CONFLICT DO NOTHING` em `estado_filas.py`. |
 | 7 | **Uma única autoridade.** Só o processador publica estado, recomendação e resultado; quem envia dados não decide sobre eles. | ACL: só o `processador` escreve em `estado`, `recomendacao` e `resultado`. |
-| 8 | **Biometria mínima.** A foto nunca passa pelo broker nem é gravada fora do bucket; só a referência circula, e só o processador a lê. | ACL: só o `processador` lê `fila/+/leitura`; o observador não recebe leituras. |
+| 8 | **Biometria mínima.** A foto nunca passa pelo broker nem é gravada fora do bucket; só a referência circula, e só o backend a usa (no Rekognition e no link temporário do admin). | ACL: só o `backend` publica `fila/+/leitura`; o `processador` e o `observador` leem, e a observabilidade descarta `fotoRef` antes de mostrar a tentativa. |
 
 ### Como as regras se aplicam aos próximos componentes
 
@@ -229,7 +266,7 @@ desligada para facilitar um teste ou uma demonstração.
 | **App mobile (validador)** | Usuário MQTT `validador` com senha própria por aparelho ou por operador; TLS validando a CA (inclusive em MQTT sobre WebSockets, que precisa de `listener` com TLS no Mosquitto); nenhuma credencial AWS no aparelho, só URLs pré-assinadas de upload e de curta duração; nenhuma foto guardada no celular depois do envio. |
 | **Painel web (observador)** (implementado) | Usuário MQTT `observador` e papel `observador` do banco, ambos somente leitura e sem acesso a `fila/+/leitura`; recebe os dados ao vivo pelo broker e só o histórico do banco; descarta mensagem malformada ou com `filaId` diferente do tópico; login com senha em hash scrypt e sessão JWT HS256 de 1 h em cookie `HttpOnly`, `Secure` e `SameSite=Strict` (algoritmo fixo, `none` recusado); HTTPS com TLS 1.2 ou superior e certificado da CA do projeto, só em `127.0.0.1:8443`; CSP que só aceita o próprio script e a própria origem e templates Jinja2 com escape automático; credenciais do broker e do banco só no servidor, nunca no navegador. |
 | **TimescaleDB** (implementado) | Conexão com TLS obrigatório (`sslmode=verify-full`); um usuário de escrita só para o processador e um usuário somente leitura para o painel; senha fora do Git; banco sem porta exposta à internet. Detalhes em [Persistência com TimescaleDB](#persistência-com-timescaledb). |
-| **AWS Rekognition e S3** | Credenciais só no processador, com uma política IAM que permita apenas `SearchFacesByImage` na coleção do evento e leitura e exclusão no bucket das fotos; bucket privado e cifrado; fotos apagadas logo após a avaliação; nenhuma chave da AWS no Git nem no app. |
+| **AWS Rekognition e S3** | Credenciais só no backend, com uma política IAM que permita apenas o que ele usa na coleção do evento (`IndexFaces`, `SearchFacesByImage`, `DeleteFaces`, `DescribeCollection`) e gravação e leitura no bucket das fotos; bucket privado e cifrado; fotos apagadas logo após a avaliação; nenhuma chave da AWS no Git nem no app. |
 
 ### Permissões no broker
 
@@ -276,8 +313,9 @@ flowchart LR
 | `produtor` | contagem, saída, heartbeat | nada | ler dados, emitir estado |
 | `validador` | leitura | resultado, estado | criar entradas ou saídas, decidir o próprio resultado |
 | `processador` | resultado, estado, recomendação | contagem, saída, heartbeat, leitura | — |
-| `consumidor` | nada | estado | criar movimentos |
-| `observador` | nada | tudo, menos leitura | escrever, ver biometria |
+| `consumidor` | reação | estado, resultado | criar movimentos ou resultados |
+| `backend` | leitura | resultado | ler o resto (é da observabilidade) |
+| `observador` | só o próprio status | tudo em `fila/` e em `sistema/` | escrever, mostrar a referência da foto |
 
 ## Persistência com TimescaleDB
 
@@ -291,8 +329,10 @@ flowchart LR
     B(("Broker")) --> C["Processador<br/>valida e deduplica"]
     C -- "TLS verify-full<br/>papel processador" --> T[("TimescaleDB<br/>127.0.0.1:5433")]
     T --> AG["continuous aggregates<br/>por minuto"]
-    AG -- "histórico por minuto<br/>TLS verify-full, papel observador" --> O["Observador<br/>painel web"]
+    AG -- "histórico<br/>TLS verify-full, papel observador" --> O["Observabilidade<br/>não grava"]
     B -- "ao vivo<br/>MQTT/TLS, usuário observador" --> O
+    O -- "API interna<br/>ao vivo e histórico" --> K["Backend<br/>rotas /admin"]
+    T -- "gestão: usuários, ingressos, auditoria<br/>papel painel" --> K
     V["Validador"] -. "sem acesso ao banco<br/>(usa o estado do MQTT)" .-x T
 ```
 
@@ -327,8 +367,9 @@ erDiagram
 | Objeto | Tipo | Conteúdo |
 |---|---|---|
 | `filas` | tabela | saldo de entradas e saídas por fila. Fica separado para que uma saída a mais com a fila vazia não deixe a ocupação negativa. |
-| `movimentos` | hypertable por `momento` | todo evento aceito. A chave `(evento_id, tipo, momento)` descarta as reentregas do QoS 1. A leitura guarda só o `eventId`, **nunca a referência da foto**. |
+| `movimentos` | hypertable por `momento` | todo evento aceito. A chave `(evento_id, tipo, momento)` descarta as reentregas do QoS 1. Cada linha guarda `correlacao_id` e `origem` do contrato. A leitura guarda só o `event_id`, **nunca a referência da foto**. |
 | `estados` | hypertable por `momento` | cada estado publicado: semáforo, ocupação e espera estimada. |
+| `saida` | tabela comum | transactional outbox: a publicação de cada `resultado`, gravada com a decisão; `publicado_em` fica nulo até o broker confirmar. |
 | `movimentos_por_minuto` | continuous aggregate | entradas, saídas, aceitos, recusados e indeterminados por fila e minuto (vazão). |
 | `espera_por_minuto` | continuous aggregate | espera média e máxima e ocupação máxima por fila e minuto. |
 
@@ -345,13 +386,31 @@ perde se o processador ou o banco caírem:
   (`.local/mosquitto/`) o que chega enquanto o processador está fora do ar.
 - A confirmação ao broker (PUBACK) é manual. Ela só é enviada depois que o
   evento foi gravado no banco. Para a leitura facial, só depois que o
-  resultado foi gravado e publicado.
+  resultado e a publicação dele foram gravados (outbox, abaixo).
 - Se o banco falhar, o processador se desconecta sem confirmar e encerra.
   Quando ele é iniciado de novo, o broker reentrega as mensagens pendentes, e
   a chave de `movimentos` descarta as que já tinham sido gravadas.
 - O broker usa o usuário como client id (`use_username_as_clientid`). Assim,
   outro papel não consegue assumir a sessão do processador nem ler as leituras
   guardadas para ele.
+
+Do processador para fora, o `resultado` usa o padrão **transactional
+outbox**:
+
+- A marcação do ingresso, o resultado em `movimentos` e a mensagem em `saida`
+  são gravados na mesma transação. Só depois a leitura é confirmada ao broker.
+- O processador publica o que está em `saida` com `publicado_em` nulo e marca
+  `publicado_em` quando chega o PUBACK do broker (`on_publish`). O que ficou
+  sem confirmação sai de novo ao reconectar e a cada 5 s.
+- Uma queda entre gravar e publicar não perde a resposta: ela está em `saida`
+  e é publicada quando o processador volta. A mesma resposta pode sair mais de
+  uma vez, sempre com o mesmo `event_id` (`{leitura}-resultado`), então quem
+  consome deduplica.
+- Uma leitura reentregue não decide de novo: devolve a decisão gravada, põe a
+  publicação dela pendente outra vez e avisa a duplicata em
+  `sistema/processador/rejeitado`.
+- `estado` e `recomendacao` não passam pelo outbox: são retidos no broker e
+  republicados a cada mudança, então se corrigem sozinhos.
 
 ```mermaid
 sequenceDiagram
@@ -383,7 +442,7 @@ O banco cumpre as [regras obrigatórias](#regras-obrigatórias-de-segurança):
 | Uma identidade por componente | papéis `processador` e `observador`, com senha SCRAM própria; o superusuário `postgres` só entra pelo socket local do contêiner. |
 | Menor privilégio | `processador` lê, insere e atualiza, mas não apaga, não faz `TRUNCATE` e não cria tabelas; `observador` só lê. |
 | Segredo fora do Git | senhas, certificado e chave em `.local/banco`, gerados por `banco/configurar-banco.sh`. |
-| Desconfiar do que chega | o processador valida tópico, tipo e `eventTimeMs` antes de gravar; o esquema tem `CHECK` em `tipo`, `resultado` e `semaforo`. |
+| Desconfiar do que chega | o processador valida o envelope do contrato (tópico, `event_type`, ids e `timestamp`) antes de gravar; o esquema tem `CHECK` em `tipo`, `resultado` e `semaforo`. |
 | Idempotência | `ON CONFLICT DO NOTHING` na chave de `movimentos`. |
 | Biometria mínima | nenhuma tabela guarda foto nem referência de foto. |
 | Rede | porta publicada só em `127.0.0.1:5433`; telemetria do TimescaleDB desligada. |
