@@ -22,12 +22,6 @@
     .bloqueada { background: #fb6c68; box-shadow: 0 0 22px #fb6c6888; }
     .numero { font-size: 4.5rem; font-weight: 750; line-height: 1; margin-top: 23px; }
     .legenda { margin: 4px 0 26px; }
-    button { width: 100%; padding: 15px; border: 0; border-radius: 10px; background: #e9f3ff; color: #152439; font: inherit; font-weight: 700; cursor: pointer; }
-    button:hover:not(:disabled) { background: #bddcff; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-    .botoes { display: grid; gap: 8px; }
-    button.secundario { background: #2c3e55; color: #eef3fa; }
-    button.secundario:hover:not(:disabled) { background: #3a5272; }
     .aceito { color: #38d589; } .recusado { color: #fb6c68; } .indeterminado { color: #ffd45b; }
     .meta { font-size: .89rem; margin: 18px 0 0; min-height: 1.4em; }
     .logs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-top: 16px; }
@@ -46,10 +40,10 @@
     <div class="eyebrow">Leite de Pedra · demonstração local</div>
     <h1>Validador</h1>
     <p>Abra esta página em <a href="http://localhost:8000" style="color:#9dd0ff">http://localhost:8000</a> com <code>python3 -u validador/servidor.py</code> em execução. Abrir o HTML diretamente não conecta à API.</p>
-    <p>No Wokwi, aproxime uma pessoa do sensor de entrada para registrar a chegada e do sensor de saída para registrar a passagem. Aqui, simule a leitura facial: o processador compara o rosto com a coleção e devolve se a pessoa foi aceita. A ocupação e os LEDs seguem os sensores.</p>
+    <p>No Wokwi, aproxime uma pessoa do sensor de entrada para registrar a chegada e do sensor de saída para registrar a passagem. A leitura facial é feita pelo validador no app: o resultado de cada uma aparece aqui. A ocupação e os LEDs seguem os sensores.</p>
     <div class="grid">
-      <article data-fila="fila-a"><div class="top"><h2>Fila A</h2><span class="lamp" aria-label="Estado da fila A"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><div class="botoes"><button type="button" data-foto="demo/rosto-cadastrado.jpg">Ler rosto cadastrado</button><button type="button" data-foto="demo/rosto-desconhecido.jpg" class="secundario">Ler rosto desconhecido</button></div><p class="meta">Aguardando dados...</p><p class="resultado meta"></p></article>
-      <article data-fila="fila-b"><div class="top"><h2>Fila B</h2><span class="lamp" aria-label="Estado da fila B"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><div class="botoes"><button type="button" data-foto="demo/rosto-cadastrado.jpg">Ler rosto cadastrado</button><button type="button" data-foto="demo/rosto-desconhecido.jpg" class="secundario">Ler rosto desconhecido</button></div><p class="meta">Aguardando dados...</p><p class="resultado meta"></p></article>
+      <article data-fila="fila-a"><div class="top"><h2>Fila A</h2><span class="lamp" aria-label="Estado da fila A"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><p class="meta">Aguardando dados...</p><p class="resultado meta"></p></article>
+      <article data-fila="fila-b"><div class="top"><h2>Fila B</h2><span class="lamp" aria-label="Estado da fila B"></span></div><div class="numero">–</div><p class="legenda">pessoas aguardando</p><p class="meta">Aguardando dados...</p><p class="resultado meta"></p></article>
     </div>
     <p id="aviso" role="status" aria-live="polite"></p>
     <h2 style="margin-top:36px">Terminais e simulações</h2>
@@ -61,7 +55,6 @@
     const textoResultado = {aceito: 'Aceito', recusado: 'Recusado', indeterminado: 'Indeterminado: decidir manualmente'};
     if (location.protocol === 'file:') {
       aviso.textContent = 'Abra http://localhost:8000 após iniciar python3 -u validador/servidor.py na raiz do projeto.';
-      document.querySelectorAll('button').forEach(botao => botao.disabled = true);
     }
     async function atualizar() {
       if (location.protocol === 'file:') return;
@@ -83,30 +76,13 @@
           const resultado = card.querySelector('.resultado');
           resultado.className = 'resultado meta ' + (ultimo?.resultado || '');
           resultado.textContent = ultimo
-            ? `Última leitura: ${textoResultado[ultimo.resultado] || ultimo.resultado} · ${new Date(ultimo.eventTimeMs).toLocaleTimeString('pt-BR')}`
+            ? `Última leitura: ${textoResultado[ultimo.resultado] || ultimo.resultado}${ultimo.motivo ? ` (${ultimo.motivo})` : ''}${ultimo.ingressoId ? ` · ingresso ${ultimo.ingressoId}` : ''} · ${new Date(ultimo.timestamp).toLocaleTimeString('pt-BR')}`
             : '';
         }
         aviso.textContent = '';
       } catch {
         aviso.textContent = 'Não foi possível consultar o servidor local. Inicie python3 -u validador/servidor.py e abra http://localhost:8000.';
       }
-    }
-    for (const card of document.querySelectorAll('article[data-fila]')) {
-      for (const botao of card.querySelectorAll('button')) botao.addEventListener('click', async () => {
-        botao.disabled = true;
-        try {
-          const resposta = await fetch('/api/leituras', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({filaId: card.dataset.fila, fotoRef: botao.dataset.foto})
-          });
-          const dados = await resposta.json();
-          aviso.textContent = dados.mensagem || dados.erro || 'Falha ao enviar a leitura';
-        } catch {
-          aviso.textContent = 'Falha de conexão com o servidor local.';
-        }
-        botao.disabled = false;
-        await atualizar();
-      });
     }
     const paineis = {};
     async function atualizarLogs() {

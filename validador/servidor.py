@@ -1,4 +1,4 @@
-"""Interface local do validador: envia leituras faciais e mostra o resultado, sem credenciais MQTT no navegador."""
+"""Console local da demonstração: estado das filas, últimos resultados faciais e logs. As leituras vêm do app, pelo backend."""
 
 import json
 import socket
@@ -6,7 +6,6 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -15,7 +14,7 @@ import paho.mqtt.client as mqtt
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
-from mqtt_config import conectar
+from mqtt_config import conectar, desconectar, ler_evento
 
 
 PASTA_LOGS = RAIZ / ".local" / "logs"
@@ -24,14 +23,14 @@ PASTA_LOGS = RAIZ / ".local" / "logs"
 TERMINAIS = {
     "broker": "mosquitto -c broker/mosquitto.conf",
     "processador": "processador/processador.py",
-    "observador": "observador.painel",
+    "backend": "[-]m backend",  # o colchete evita que o pgrep leia "-m" como opção
     "validador": None,  # é este próprio processo
 }
 # Exibido ao lado do nome; "→" indica cliente que só se conecta ao broker.
 PORTAS_TERMINAIS = {
     "broker": "8883",
     "processador": "→ 8883",
-    "observador": "8443 → 8883",
+    "backend": "8444 → 8883",
     "validador": "8000",
 }
 # Portas definidas por rfc2217ServerPort nos wokwi.toml.
@@ -66,13 +65,13 @@ def ao_conectar(client, userdata, flags, reason_code, properties):
 
 
 def ao_receber(client, userdata, mensagem):
-    try:
-        payload = json.loads(mensagem.payload)
-        fila = payload["filaId"]
-    except (ValueError, KeyError, TypeError):
+    evento = ler_evento(mensagem.topic, mensagem.payload)
+    if evento is None:
         return
+    fila = evento["payload"]["filaId"]
     if fila not in {"fila-a", "fila-b"}:
         return
+    payload = {**evento["payload"], "timestamp": evento["timestamp"]}
     with trava_estados:
         if mensagem.topic.endswith("/resultado"):
             resultados[fila] = payload
@@ -198,51 +197,6 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.responder_json(404, {"erro": "Não encontrado"})
 
-    def do_POST(self):
-        if self.path != "/api/leituras":
-            self.responder_json(404, {"erro": "Não encontrado"})
-            return
-        try:
-            tamanho = int(self.headers.get("Content-Length", "0"))
-            if not 0 < tamanho <= 1024:
-                raise ValueError("Tamanho inválido")
-            dados = json.loads(self.rfile.read(tamanho))
-            fila = dados["filaId"]
-            foto = dados["fotoRef"]
-            if fila not in {"fila-a", "fila-b"}:
-                raise ValueError("Fila inválida")
-            if not isinstance(foto, str) or not 0 < len(foto) <= 256:
-                raise ValueError("Foto inválida")
-        except (ValueError, KeyError, TypeError):
-            self.responder_json(400, {"erro": "Informe fila-a ou fila-b e a referência da foto"})
-            return
-
-        if not cliente.is_connected():
-            self.responder_json(503, {"erro": "Broker MQTT indisponível"})
-            return
-
-        # Só a referência da foto passa pelo broker; a imagem fica no bucket
-        # e não chega a quem assina os tópicos.
-        payload = {
-            "eventId": uuid.uuid4().hex,
-            "filaId": fila,
-            "tipo": "leitura",
-            "fotoRef": foto,
-            "eventTimeMs": int(time.time() * 1000),
-        }
-        publicacao = cliente.publish(
-            f"fila/{fila}/leitura", json.dumps(payload), qos=1
-        )
-        try:
-            publicacao.wait_for_publish(timeout=3)
-        except RuntimeError:
-            pass
-        if publicacao.rc != mqtt.MQTT_ERR_SUCCESS or not publicacao.is_published():
-            self.responder_json(503, {"erro": "Falha ao enviar a leitura"})
-            return
-        self.responder_json(202, {"mensagem": f"Leitura enviada na {fila}; aguardando o processador",
-                                  "eventId": payload["eventId"]})
-
 
 if __name__ == "__main__":
     # A página continua disponível mesmo se o broker ainda não subiu;
@@ -259,5 +213,5 @@ if __name__ == "__main__":
         pass
     finally:
         servidor.server_close()
-        cliente.disconnect()
+        desconectar(cliente, "validador")
         cliente.loop_stop()
