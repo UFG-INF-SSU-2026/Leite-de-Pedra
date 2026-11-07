@@ -4,17 +4,16 @@ import time
 from collections import deque
 from datetime import datetime, timedelta
 import threading
-import queue
 import statistics
 import sys
 from pathlib import Path
 
-import psycopg
+from sqlalchemy.exc import DBAPIError
 
 # Os módulos compartilhados ficam na raiz.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from estado_filas import EstadoFilas
-from mqtt_config import conectar
+from mqtt_config import conectar, desconectar, evento, ler_evento
 
 TOPICO_CONTAGEM = "fila/+/contagem"
 TOPICO_SAIDA = "fila/+/saida"
@@ -23,9 +22,15 @@ TOPICO_LEITURA = "fila/+/leitura"
 TOPICO_RECOMENDACAO = "fila/{}/recomendacao"
 TOPICO_ESTADO = "fila/{}/estado"
 TOPICO_RESULTADO = "fila/{}/resultado"
+# Fila de mensagens com falha: o que o processador descartou, e por quê.
+TOPICO_REJEITADO = "sistema/processador/rejeitado"
+INTERVALO_SAIDA_SEGUNDOS = 5  # nova tentativa do que o broker não confirmou
 
-# Simulação do SearchFacesByImage do AWS Rekognition até a coleção real existir.
-ROSTOS_CADASTRADOS = {"demo/rosto-cadastrado.jpg"}
+# O rosto é reconhecido pelo backend (Rekognition), que publica a leitura com
+# o usuário reconhecido; só o backend pode publicar leituras (ACL). Aqui ficam
+# as regras do ingresso: quem leu é validador, o ingresso é do dono do rosto,
+# não foi usado nem cancelado. Sem AWS no processador.
+RECONHECIMENTOS = {"reconhecido", "nao-reconhecido", "falha"}
 
 # As filas não são declaradas: o processador as descobre pelos tópicos que
 # chegam. Assim ele não precisa ser reiniciado nem reconfigurado quando o
@@ -72,7 +77,9 @@ semaforo = {}
 ultima_publicacao = {}
 ultimo_heartbeat_recebido = {}
 ultimo_estado_publicado = {}
-leituras = queue.Queue()
+# mid do Paho -> event_id da saída (outbox) publicada e ainda sem PUBACK.
+aguardando_puback = {}
+trava_saida = threading.Lock()
 falhou = False
 
 def registrar(fila):
@@ -93,54 +100,58 @@ def on_message(client, userdata, msg):
     try:
         if processar_mensagem(client, msg):
             client.ack(msg.mid, msg.qos)
-    except psycopg.Error as erro:
+    except DBAPIError as erro:
         desconectar_sem_confirmar(client, erro)
 
 def desconectar_sem_confirmar(client, erro):
     global falhou
     falhou = True
     print(f"Falha no banco: {erro}. Desconectando sem confirmar as mensagens pendentes.")
-    client.disconnect()
+    desconectar(client, "processador")
 
-def momento_valido(momento):
-    return isinstance(momento, int) and not isinstance(momento, bool) and 0 < momento < 10**14
+def rejeitar(client, msg, motivo, recebido=None):
+    """Publica o descarte em TOPICO_REJEITADO, para a observabilidade, e confirma a mensagem."""
+    print(f"Mensagem rejeitada em {msg.topic}: {motivo}")
+    payload = {"topico": msg.topic, "motivo": motivo}
+    if recebido:
+        payload["eventId"] = recebido["event_id"]
+    elif not msg.topic.endswith("/leitura"):  # leitura não vai para fora, nem malformada
+        payload["conteudo"] = msg.payload[:300].decode("utf-8", "replace")
+    rejeicao = evento("rejeitado", "processador", payload,
+                      correlation_id=recebido["correlation_id"] if recebido else None)
+    client.publish(TOPICO_REJEITADO, json.dumps(rejeicao), qos=1)
+    return True
 
 def processar_mensagem(client, msg):
-    try:
-        payload = json.loads(msg.payload.decode())
-    except ValueError:
-        print(f"Payload que não é JSON em {msg.topic}: descartado")
-        return True
-    partes = msg.topic.split("/")
-    if len(partes) != 3 or partes[0] != "fila" or not isinstance(payload, dict):
-        return True
-    fila, tipo = partes[1], partes[2]
-    if payload.get("filaId") != fila or tipo not in {"contagem", "saida", "heartbeat", "leitura"}:
-        print(f"Evento inválido em {msg.topic}: tópico e payload divergentes")
-        return True
-    if not momento_valido(payload.get("eventTimeMs")):
-        print(f"Evento sem eventTimeMs válido em {msg.topic}")
-        return True
+    recebido = ler_evento(msg.topic, msg.payload)
+    if recebido is None:
+        return rejeitar(client, msg, "fora-do-contrato")
+    _, fila, tipo = msg.topic.split("/")
+    if tipo not in {"contagem", "saida", "heartbeat", "leitura"}:
+        return rejeitar(client, msg, "tipo-desconhecido", recebido)
 
     if tipo == "leitura":
-        if not isinstance(payload.get("fotoRef"), str) or not payload.get("eventId"):
-            print(f"Leitura sem fotoRef ou eventId em {msg.topic}")
-            return True
-        novo = estado_persistente.aplicar(fila, tipo, payload)[0]
-        if not novo and estado_persistente.tem_resultado(payload["eventId"]):
-            return True
-        leituras.put((payload, msg))
-        return False
+        payload = recebido["payload"]
+        campos = ("fotoRef", "ingressoId", "validadorId")
+        reconhecido = payload.get("reconhecimento") == "reconhecido"
+        if (not all(texto_valido(payload.get(c)) for c in campos)
+                or payload.get("reconhecimento") not in RECONHECIMENTOS
+                or reconhecido != texto_valido(payload.get("usuarioReconhecido"))):
+            return rejeitar(client, msg, "leitura-incompleta", recebido)
+        estado_persistente.aplicar(fila, recebido)
+        if not decidir_leitura(client, recebido):
+            rejeitar(client, msg, "duplicado", recebido)  # a resposta já gravada sai de novo
+        return True
 
     registrar(fila)
 
     if tipo in {"contagem", "saida"}:
         saidas_antes = saidas[fila]
-        novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, tipo, payload)
+        novo, entradas[fila], saidas[fila] = estado_persistente.aplicar(fila, recebido)
         if not novo:
-            return True
+            return rejeitar(client, msg, "duplicado", recebido)
         if tipo == "saida" and saidas[fila] > saidas_antes:
-            instante = datetime.fromtimestamp(payload["eventTimeMs"] / 1000)
+            instante = datetime.fromtimestamp(recebido["timestamp"] / 1000)
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
     elif tipo == "heartbeat":
         # Não entra na contabilidade: só prova que o enlace está vivo quando
@@ -148,37 +159,91 @@ def processar_mensagem(client, msg):
         # dados em qualquer período calmo, com o enlace perfeito.
         ultimo_heartbeat_recebido[fila] = time.monotonic()
 
-    recomendar_fila(client)
+    recomendar_fila(client, recebido["correlation_id"])
     return True
 
-def avaliar_rosto(foto_ref):
-    return "aceito" if foto_ref in ROSTOS_CADASTRADOS else "recusado"
+def texto_valido(valor):
+    return isinstance(valor, str) and 0 < len(valor) <= 256
 
-def avaliar_leitura(client, leitura, msg):
+def resultado_de(leitura):
+    """A publicação do resultado da leitura, para a saída: (event_id, tópico, conteúdo)."""
+    dados = leitura["payload"]
+
+    def montar(resultado, motivo, momento_ms):
+        payload = {
+            "filaId": dados["filaId"],
+            "leituraId": leitura["event_id"],
+            "ingressoId": dados["ingressoId"],
+            "resultado": resultado,
+        }
+        if motivo:
+            payload["motivo"] = motivo
+        # event_id derivado da leitura: a resposta repetida numa reentrega é o mesmo evento.
+        mensagem = evento("resultado", "processador", payload, correlation_id=leitura["correlation_id"],
+                          event_id=f"{leitura['event_id']}-resultado", timestamp=momento_ms)
+        return mensagem["event_id"], TOPICO_RESULTADO.format(dados["filaId"]), json.dumps(mensagem)
+    return montar
+
+def publicar_saida(client):
+    """Publica o que está na saída (outbox) e o broker ainda não confirmou.
+
+    A confirmação (PUBACK) chega em on_publish, que marca publicado_em. O que
+    estava no ar numa queda sai de novo: quem consome deduplica pelo event_id.
+    """
+    with trava_saida:
+        no_ar = set(aguardando_puback.values())
+        for evento_id, topico, conteudo in estado_persistente.saida_pendente():
+            if evento_id in no_ar:
+                continue
+            envio = client.publish(topico, conteudo, qos=1)
+            if envio.rc == mqtt.MQTT_ERR_SUCCESS:
+                aguardando_puback[envio.mid] = evento_id
+
+def on_publish(client, userdata, mid, reason_code, properties):
+    with trava_saida:
+        evento_id = aguardando_puback.pop(mid, None)
+    if evento_id is None:
+        return
     try:
-        resultado = avaliar_rosto(leitura["fotoRef"])
-    except Exception as erro:
-        # Sem resposta do reconhecimento o operador decide manualmente.
-        print(f"Falha no reconhecimento de {leitura['eventId']}: {erro}")
-        resultado = "indeterminado"
-    payload = {
-        "eventId": leitura["eventId"],
-        "filaId": leitura["filaId"],
-        "tipo": "resultado",
-        "resultado": resultado,
-        "eventTimeMs": int(time.time() * 1000),
-    }
-    estado_persistente.registrar_resultado(payload)
-    client.publish(TOPICO_RESULTADO.format(leitura["filaId"]), json.dumps(payload), qos=1)
-    client.ack(msg.mid, msg.qos)
-    print(f"Leitura {leitura['eventId']} na {leitura['filaId']}: {resultado}")
+        estado_persistente.marcar_publicado(evento_id)
+    except DBAPIError as erro:
+        # Continua pendente: sai de novo na próxima tentativa, com o mesmo event_id.
+        print(f"Falha ao marcar {evento_id} como publicado: {erro}")
 
-def reconhecimento(client):
+def retransmitir(client):
     while True:
+        time.sleep(INTERVALO_SAIDA_SEGUNDOS)
+        if not client.is_connected():
+            continue
         try:
-            avaliar_leitura(client, *leituras.get())
-        except psycopg.Error as erro:
-            desconectar_sem_confirmar(client, erro)
+            publicar_saida(client)
+        except DBAPIError as erro:
+            print(f"Falha ao ler a saída: {erro}")
+
+def decidir_leitura(client, leitura):
+    """Decide e grava a leitura com o resultado na saída; False se ela já tinha sido decidida."""
+    dados = leitura["payload"]
+    usuario = dados.get("usuarioReconhecido")
+    # Primeiro quem enviou: só um validador libera entrada.
+    if not estado_persistente.e_validador(dados["validadorId"]):
+        resultado, motivo = "recusado", "validador-nao-autorizado"
+    elif dados["reconhecimento"] == "falha":
+        # Sem resposta do reconhecimento o operador decide manualmente.
+        resultado, motivo = "indeterminado", "falha-reconhecimento"
+    elif dados["reconhecimento"] == "nao-reconhecido":
+        resultado, motivo = "recusado", "rosto-nao-confere"
+    else:
+        resultado, motivo = "aceito", None
+    # Depois o ingresso: o banco confirma que é do dono do rosto e que não foi usado.
+    # Numa reentrega, devolve a decisão já gravada, sem gastar outro ingresso.
+    resultado, motivo, _, nova = estado_persistente.registrar_resultado(
+        leitura["event_id"], dados["filaId"], int(time.time() * 1000), dados["ingressoId"],
+        resultado, motivo, usuario, dados["validadorId"], leitura["correlation_id"],
+        mensagem=resultado_de(leitura))
+    publicar_saida(client)
+    print(f"Leitura {leitura['event_id']} na {dados['filaId']}, ingresso {dados['ingressoId']}: "
+          f"{resultado}" + (f" ({motivo})" if motivo else ""))
+    return nova
 
 def heartbeat_recente(fila, agora_monotonico):
     ultimo = ultimo_heartbeat_recebido[fila]
@@ -289,7 +354,8 @@ def motivo_de(fila, destino, ocupacao, tempo_espera):
     return (f"{situacao_de(fila, ocupacao, tempo_espera)}; "
             f"{situacao_de(destino, ocupacao, tempo_espera)}")
 
-def recomendar_fila(client):
+def recomendar_fila(client, correlacao):
+    """Publica estado e recomendação; correlacao é a do evento que provocou o recálculo."""
     agora = datetime.now()
     agora_monotonico = time.monotonic()
 
@@ -318,10 +384,10 @@ def recomendar_fila(client):
             destino = melhor_fila(fila, atualizadas, tempo_espera)
 
         motivo = motivo_de(fila, destino, ocupacao, tempo_espera)
-        publicar(client, fila, ocupacao[fila], destino, tempo_espera[fila], motivo)
-        publicar_estado(client, fila, ocupacao[fila], destino, tempo_espera[fila])
+        publicar(client, fila, ocupacao[fila], destino, tempo_espera[fila], motivo, correlacao)
+        publicar_estado(client, fila, ocupacao[fila], destino, tempo_espera[fila], correlacao)
 
-def publicar_estado(client, fila, ocupacao, destino, espera):
+def publicar_estado(client, fila, ocupacao, destino, espera, correlacao):
     estado = (semaforo[fila], ocupacao, destino, int(espera) if espera is not None and espera != float("inf") else None)
     if ultimo_estado_publicado[fila] == estado:
         return
@@ -332,12 +398,13 @@ def publicar_estado(client, fila, ocupacao, destino, espera):
         "sentidoRecomendado": estado[2],
         "tempoEsperaEstimado": estado[3],
     }
-    resultado = client.publish(TOPICO_ESTADO.format(fila), json.dumps(payload), qos=1, retain=True)
+    mensagem = evento("estado", "processador", payload, correlation_id=correlacao)
+    resultado = client.publish(TOPICO_ESTADO.format(fila), json.dumps(mensagem), qos=1, retain=True)
     if resultado.rc == mqtt.MQTT_ERR_SUCCESS:
         ultimo_estado_publicado[fila] = estado
         estado_persistente.registrar_estado(fila, *estado[:2], estado[3])
 
-def publicar(client, fila, ocupacao, destino, espera, motivo):
+def publicar(client, fila, ocupacao, destino, espera, motivo, correlacao):
     estado = (semaforo[fila], destino)
     if ultima_publicacao[fila] == estado:
         return
@@ -353,7 +420,8 @@ def publicar(client, fila, ocupacao, destino, espera, motivo):
             int(espera) if espera is not None and espera != float("inf") else None
         ),
     }
-    client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(payload), qos=1, retain=True)
+    mensagem = evento("recomendacao", "processador", payload, correlation_id=correlacao)
+    client.publish(TOPICO_RECOMENDACAO.format(fila), json.dumps(mensagem), qos=1, retain=True)
     ultima_publicacao[fila] = estado
 
     if anterior is not None and anterior != estado:
@@ -406,6 +474,13 @@ def on_connect(client, userdata, flags, reason_code, properties):
         ultima_publicacao[fila] = None
         ultimo_estado_publicado[fila] = None
         ultimo_heartbeat_recebido[fila] = None
+    # O que estava sem PUBACK na queda sai de novo, junto com o que ficou na saída.
+    with trava_saida:
+        aguardando_puback.clear()
+    try:
+        publicar_saida(client)
+    except DBAPIError as erro:
+        print(f"Falha ao ler a saída: {erro}")  # retransmitir tenta de novo
     print("Conectado ao broker - assinaturas restabelecidas")
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="processador",
@@ -413,6 +488,7 @@ client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="processador",
 client.manual_ack_set(True)
 client.on_connect = on_connect
 client.on_message = on_message
+client.on_publish = on_publish
 for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
     registrar(fila_salva)
     entradas[fila_salva] = entradas_salvas
@@ -420,7 +496,7 @@ for fila_salva, entradas_salvas, saidas_salvas in estado_persistente.listar():
     print(f"Estado recuperado: {fila_salva}, {ocupacao_de(fila_salva)} pessoa(s)")
 conectar(client, "processador")
 threading.Thread(target=painel, daemon=True).start()
-threading.Thread(target=reconhecimento, args=(client,), daemon=True).start()
+threading.Thread(target=retransmitir, args=(client,), daemon=True).start()
 client.loop_forever()
 if falhou:
     sys.exit("Processador parado: corrija o banco e inicie de novo; o broker reentrega o pendente.")
