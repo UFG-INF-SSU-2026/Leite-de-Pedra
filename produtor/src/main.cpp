@@ -17,7 +17,10 @@ const char *ID_CLIENTE = "wokwi-sensores";
 
 // ESP32 das filas: cada fila tem um sensor na entrada e outro na saída.
 // Ele só publica movimentos; quem calcula ocupação e espera é o processador.
+// Mensagens no contrato comum (docs/ARQUITETURA.md, "Contrato das mensagens").
 const char *BROKER = "host.wokwi.internal";
+const char *USUARIO = "produtor";  // também o source: o broker usa o usuário como client id
+const char *TOPICO_STATUS = "sistema/produtor/status";
 const unsigned long INTERVALO_SENSOR_MS = 200;
 const unsigned long INTERVALO_HEARTBEAT_MS = 2000;
 const float LIMIAR_PRESENCA_CM = 60.0;
@@ -43,6 +46,7 @@ WiFiClientSecure tls;
 MQTTClient mqtt(768);
 String bootId;
 uint32_t sequencia = 0;
+uint32_t conexoes = 0;
 unsigned long ultimaLeitura = 0;
 unsigned long ultimoHeartbeat = 0;
 unsigned long ultimaTentativa = 0;
@@ -83,19 +87,34 @@ void publicarPendentes() {
   }
 }
 
+// Envelope do contrato. Um movimento abre a própria operação: correlation_id = event_id.
+String envelope(const String &id, const char *tipo, JsonDocument &doc) {
+  doc["event_id"] = id;
+  doc["correlation_id"] = id;
+  doc["event_type"] = tipo;
+  doc["source"] = USUARIO;
+  doc["timestamp"] = static_cast<uint64_t>(time(nullptr)) * 1000;
+  String json;
+  serializeJson(doc, json);
+  return json;
+}
+
+String status(bool online) {
+  StaticJsonDocument<384> doc;
+  doc["payload"]["online"] = online;
+  return envelope(bootId + "-status-" + String(conexoes) + (online ? "-online" : "-offline"),
+                  "status", doc);
+}
+
 void publicarEvento(const char *fila, const char *tipo) {
   // Heartbeat é descartável: não ocupa o buffer reservado aos movimentos
   // durante uma queda do broker.
   if (strcmp(tipo, "heartbeat") == 0 &&
       (!mqtt.connected() || quantidadePendente > 0)) return;
-  StaticJsonDocument<256> doc;
-  doc["filaId"] = fila;
-  doc["tipo"] = tipo;
-  doc["sequence"] = ++sequencia;
-  doc["eventTimeMs"] = static_cast<uint64_t>(time(nullptr)) * 1000;
-  doc["eventId"] = bootId + "-" + String(sequencia);
-  String payload;
-  serializeJson(doc, payload);
+  StaticJsonDocument<384> doc;
+  doc["payload"]["filaId"] = fila;
+  doc["payload"]["sequence"] = ++sequencia;
+  String payload = envelope(bootId + "-" + String(sequencia), tipo, doc);
   String topico = String("fila/") + fila + "/" + tipo;
   if (strcmp(tipo, "heartbeat") == 0) {
     mqtt.publish(topico, payload, false, 1);
@@ -120,8 +139,12 @@ void verificarSensor(Sensor &sensor) {
 void conectarMqtt() {
   if (mqtt.connected() || millis() - ultimaTentativa < 3000) return;
   ultimaTentativa = millis();
-  if (mqtt.connect(ID_CLIENTE, "produtor", SENHA)) {
+  conexoes++;
+  // Last Will: se a conexão cair, o broker publica offline (retido) por nós.
+  mqtt.setWill(TOPICO_STATUS, status(false).c_str(), true, 1);
+  if (mqtt.connect(ID_CLIENTE, USUARIO, SENHA)) {
     Serial.println("MQTT/TLS autenticado");
+    mqtt.publish(TOPICO_STATUS, status(true), true, 1);
     publicarPendentes();
   } else {
     // Retorno 5 do CONNACK = não autorizado pelo broker.
