@@ -1,0 +1,129 @@
+# Sistema completo: banco, broker, processador, observabilidade e backend (com o dashboard).
+# Antes da primeira vez: os scripts de configuração (README) e docker/preparar.sh.
+#
+#   docker compose up -d --build      # sobe tudo
+#   docker compose logs -f processador
+#
+# Fora do Docker: os ESP32 (Wokwi, no VS Code, pelo broker em 127.0.0.1:8883),
+# o app mobile (Expo) e o console validador/ (lê logs e seriais do host).
+# Todas as portas ficam só em 127.0.0.1.
+
+name: leite-de-pedra
+
+x-servico-python: &servico-python
+  build: .
+  image: leite-de-pedra
+  # O mesmo usuário do host (HOST_UID no .env, de docker/preparar.sh): os segredos
+  # em .local/ são 600 e pertencem a ele.
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  restart: unless-stopped
+  volumes:
+    - ./.local:/app/.local:ro
+  depends_on:
+    banco: { condition: service_healthy }
+    broker: { condition: service_started }
+
+x-ambiente: &ambiente
+  MQTT_HOST: broker
+  FILAS_DB_HOST: banco
+  FILAS_DB_PORT: "5432"
+
+services:
+  banco:
+    image: timescale/timescaledb:2.17.2-pg17
+    container_name: leite-de-pedra-banco
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: filas
+      POSTGRES_PASSWORD_FILE: /run/segredos/admin.password
+    volumes:
+      - ./.local/banco:/segredos:ro
+      - ./banco/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./banco/inicializar.sh:/docker-entrypoint-initdb.d/inicializar.sh:ro
+      - ./banco/esquema.sql:/esquema.sql:ro
+      - ./banco/ingressos.sql:/ingressos.sql:ro
+      - dados:/var/lib/postgresql/data
+    # O PostgreSQL só aceita a chave TLS se ela pertencer ao usuário postgres com permissão 600.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        mkdir -p /run/segredos &&
+        cp /segredos/* /run/segredos/ &&
+        chown -R postgres:postgres /run/segredos &&
+        chmod 600 /run/segredos/* &&
+        exec docker-entrypoint.sh postgres
+        -c ssl=on
+        -c ssl_cert_file=/run/segredos/servidor.crt
+        -c ssl_key_file=/run/segredos/servidor.key
+        -c ssl_min_protocol_version=TLSv1.2
+        -c hba_file=/etc/postgresql/pg_hba.conf
+        -c password_encryption=scram-sha-256
+        -c timescaledb.telemetry_level=off
+    healthcheck:
+      test: ["CMD-SHELL", "su postgres -c 'pg_isready -q -d filas'"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  broker:
+    image: eclipse-mosquitto:2.1.2-alpine  # a mesma versão do host: lê as senhas argon2 do mosquitto_passwd
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    working_dir: /projeto
+    # A mesma configuração do host; só o listener passa a aceitar os outros contêineres.
+    command:
+      - sh
+      - -c
+      - sed 's/^listener 8883 127.0.0.1$$/listener 8883/' broker/mosquitto.conf > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf
+    ports:
+      - "127.0.0.1:8883:8883"
+    volumes:
+      - ./broker:/projeto/broker:ro
+      - ./.local/mqtt:/projeto/.local/mqtt:ro
+      - ./.local/mosquitto:/projeto/.local/mosquitto
+    restart: unless-stopped
+
+  processador:
+    <<: *servico-python
+    command: ["python", "-u", "processador/processador.py"]
+    # Sem AWS: o rosto chega reconhecido pelo backend.
+    environment: *ambiente
+
+  backend:
+    <<: *servico-python
+    command: ["python", "-u", "-m", "backend"]
+    ports:
+      # BACKEND_ENDERECO=0.0.0.0 no .env abre para a rede (app no celular). Com
+      # Colima não dá para usar o IP do Mac: ele não existe dentro da VM do Docker.
+      - "${BACKEND_ENDERECO:-127.0.0.1}:8444:8444"
+    # Só o backend fala com a AWS (Rekognition e S3).
+    volumes:
+      - ./.local:/app/.local:ro
+      - ${HOME}/.aws:/aws:ro
+    environment:
+      <<: *ambiente
+      AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
+      AWS_CONFIG_FILE: /aws/config
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_PROFILE: ${BACKEND_AWS_PROFILE:-leite-de-pedra-admin}
+      OBSERVABILIDADE_URL: http://observabilidade:8090
+      REKOGNITION_COLECAO: ${REKOGNITION_COLECAO:-}
+      FOTOS_BUCKET: ${FOTOS_BUCKET:-}
+      BACKEND_HOST: 0.0.0.0
+
+  # Monitoramento: assina o broker (ao vivo) e lê o banco com o papel observador
+  # (histórico). Sem porta publicada: a API interna não tem autenticação, quem
+  # confere o admin é o backend.
+  observabilidade:
+    <<: *servico-python
+    command: ["python", "-u", "-m", "observabilidade"]
+    environment:
+      <<: *ambiente
+      OBSERVABILIDADE_HOST: 0.0.0.0
+
+volumes:
+  # O mesmo volume de antes (banco/docker-compose.yml): os dados continuam.
+  dados:
+    name: banco_dados
