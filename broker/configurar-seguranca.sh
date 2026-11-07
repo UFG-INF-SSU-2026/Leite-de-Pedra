@@ -7,14 +7,17 @@ RENOVAR_CERTIFICADOS=0
 
 ADICIONAR_VALIDADOR=0
 ADICIONAR_CONSUMIDOR=0
+ADICIONAR_BACKEND=0
 if [[ "${1:-}" == "--renovar-certificados" && "$#" -eq 1 ]]; then
     RENOVAR_CERTIFICADOS=1
 elif [[ "${1:-}" == "--adicionar-validador" && "$#" -eq 1 ]]; then
     ADICIONAR_VALIDADOR=1
 elif [[ "${1:-}" == "--adicionar-consumidor" && "$#" -eq 1 ]]; then
     ADICIONAR_CONSUMIDOR=1
+elif [[ "${1:-}" == "--adicionar-backend" && "$#" -eq 1 ]]; then
+    ADICIONAR_BACKEND=1
 elif [[ "$#" -ne 0 ]]; then
-    echo "Uso: $0 [--renovar-certificados|--adicionar-validador|--adicionar-consumidor]" >&2
+    echo "Uso: $0 [--renovar-certificados|--adicionar-validador|--adicionar-consumidor|--adicionar-backend]" >&2
     exit 1
 fi
 
@@ -30,9 +33,10 @@ if [[ "$RENOVAR_CERTIFICADOS" -eq 1 && ! -f "$PASTA_MQTT/mosquitto.passwd" ]]; t
     exit 1
 fi
 
-if [[ "$ADICIONAR_VALIDADOR" -eq 1 || "$ADICIONAR_CONSUMIDOR" -eq 1 ]]; then
+if [[ "$ADICIONAR_VALIDADOR" -eq 1 || "$ADICIONAR_CONSUMIDOR" -eq 1 || "$ADICIONAR_BACKEND" -eq 1 ]]; then
     papel=validador
     if [[ "$ADICIONAR_CONSUMIDOR" -eq 1 ]]; then papel=consumidor; fi
+    if [[ "$ADICIONAR_BACKEND" -eq 1 ]]; then papel=backend; fi
     if [[ ! -f "$PASTA_MQTT/mosquitto.passwd" || -e "$PASTA_MQTT/$papel.password" ]]; then
         echo "Credenciais ausentes ou $papel já configurado." >&2
         exit 1
@@ -64,7 +68,7 @@ openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 3650 \
 
 openssl req -new -newkey rsa:2048 -sha256 -nodes \
     -subj "/CN=localhost" \
-    -addext "subjectAltName=DNS:localhost,DNS:host.wokwi.internal,IP:127.0.0.1" \
+    -addext "subjectAltName=DNS:localhost,DNS:host.wokwi.internal,DNS:broker,IP:127.0.0.1" \
     -addext "basicConstraints=critical,CA:FALSE" \
     -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
     -addext "extendedKeyUsage=serverAuth" \
@@ -81,7 +85,7 @@ openssl x509 -req -sha256 -days 825 \
 
 if [[ "$RENOVAR_CERTIFICADOS" -eq 0 ]]; then
     primeiro=1
-    for papel in produtor consumidor processador observador validador; do
+    for papel in produtor consumidor processador observador validador backend; do
         senha="$(openssl rand -hex 24)"
         printf '%s\n' "$senha" > "$PASTA_MQTT/$papel.password"
         if [[ "$primeiro" -eq 1 ]]; then
@@ -98,7 +102,7 @@ chmod 600 "$PASTA_MQTT"/*
 
 echo "CA e certificado criados em $PASTA_MQTT."
 if [[ "$RENOVAR_CERTIFICADOS" -eq 0 ]]; then
-    echo "Credenciais dos cinco papéis criadas em $PASTA_MQTT."
+    echo "Credenciais dos seis papéis criadas em $PASTA_MQTT."
 else
     echo "Credenciais preservadas. Reinicie o broker."
 fi

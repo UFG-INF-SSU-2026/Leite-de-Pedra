@@ -1,14 +1,21 @@
+# Presença (Last Will e online ao conectar): cada usuário só escreve o próprio
+# status; %u é o usuário autenticado, então ninguém se passa por outro componente.
+pattern write sistema/%u/status
+
 # Produtor: envia somente os movimentos dos sensores e o heartbeat.
 user produtor
 topic write fila/+/contagem
 topic write fila/+/saida
 topic write fila/+/heartbeat
 
-# ESP32 de sinalização: recebe o estado, mas não pode criar movimentos.
+# ESP32 de sinalização: recebe o estado e os resultados e confirma a reação
+# executada; não pode criar movimentos nem resultados.
 user consumidor
 topic read fila/+/estado
+topic read fila/+/resultado
+topic write fila/+/reacao
 
-# Processador: recebe movimentos e leituras faciais; é o único que decide.
+# Processador: recebe movimentos e leituras já reconhecidas pelo backend; é o único que decide.
 user processador
 topic read fila/+/contagem
 topic read fila/+/saida
@@ -17,18 +24,23 @@ topic read fila/+/leitura
 topic write fila/+/recomendacao
 topic write fila/+/estado
 topic write fila/+/resultado
+topic write sistema/processador/rejeitado
 
-# Validador: publica leituras faciais e recebe o resultado e o estado.
+# Validador (página local da demo): só acompanha o estado e os resultados.
+# As leituras agora vêm do app, pelo backend.
 user validador
+topic read fila/+/resultado
+topic read fila/+/estado
+
+# Backend do app: publica as leituras dos validadores logados e recebe os
+# resultados que as catracas esperam. O acompanhamento ao vivo é do observador.
+user backend
 topic write fila/+/leitura
 topic read fila/+/resultado
-topic read fila/+/estado
 
-# Observador: somente leitura, sem acesso às leituras faciais.
+# Observabilidade: lê tudo e não escreve nada além do próprio status. Lê as
+# leituras para mostrar cada tentativa, mas descarta a referência da foto.
 user observador
-topic read fila/+/contagem
-topic read fila/+/saida
-topic read fila/+/heartbeat
-topic read fila/+/resultado
-topic read fila/+/estado
-topic read fila/+/recomendacao
+topic read fila/+/+
+topic read sistema/+/status
+topic read sistema/+/rejeitado
