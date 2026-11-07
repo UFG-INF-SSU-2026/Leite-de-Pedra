@@ -13,4 +13,4 @@ if [[ ! -f "$RAIZ_PROJETO/.local/banco/admin.password" ]]; then
     exit 1
 fi
 
-exec docker compose -f "$RAIZ_PROJETO/banco/docker-compose.yml" up -d --wait
+exec docker compose -f "$RAIZ_PROJETO/docker-compose.yml" up -d --wait banco

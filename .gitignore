@@ -8,3 +8,4 @@ produtor/include/segredos_consumidor.h
 .DS_Store
 produtor/.vscode/*
 !produtor/.vscode/extensions.json
+.env

@@ -1,14 +1,24 @@
 import unittest
 
-from estado_filas import PASTA_SEGREDOS, conectar_banco
+from sqlalchemy import delete
+
+from modelos import (PASTA_SEGREDOS, Auditoria, Estado, Fila, Ingresso, Movimento, Saida, Usuario,
+                     criar_motor, fabrica_de_sessoes)
 
 
-def conexao_teste(limpar=True):
+def motor_teste(limpar=True):
     if not (PASTA_SEGREDOS / "processador.password").exists():
         raise unittest.SkipTest(
             "Banco não configurado: execute banco/configurar-banco.sh e banco/iniciar-banco.sh"
         )
-    conexao = conectar_banco("processador", banco="filas_teste")
+    motor = criar_motor("processador", banco="filas_teste")
     if limpar:
-        conexao.execute("TRUNCATE filas, movimentos, estados")
-    return conexao
+        with fabrica_de_sessoes(motor).begin() as s:
+            for modelo in (Auditoria, Ingresso, Usuario, Movimento, Estado, Fila, Saida):  # ordem das chaves estrangeiras
+                s.execute(delete(modelo))
+    return motor
+
+
+def cadastrar(motor, *objetos):
+    with fabrica_de_sessoes(motor).begin() as s:
+        s.add_all(objetos)

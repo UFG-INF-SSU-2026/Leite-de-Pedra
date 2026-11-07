@@ -27,7 +27,7 @@ umask 077
 
 openssl req -new -newkey rsa:2048 -sha256 -nodes \
     -subj "/CN=localhost" \
-    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+    -addext "subjectAltName=DNS:localhost,DNS:banco,IP:127.0.0.1" \
     -addext "basicConstraints=critical,CA:FALSE" \
     -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
     -addext "extendedKeyUsage=serverAuth" \
@@ -42,7 +42,7 @@ openssl x509 -req -sha256 -days 825 \
     -copy_extensions copy \
     -out "$PASTA_BANCO/servidor.crt"
 
-for papel in admin processador observador; do
+for papel in admin processador backend painel observador; do
     openssl rand -hex 24 > "$PASTA_BANCO/$papel.password"
 done
 

@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-GRANT USAGE ON SCHEMA public TO processador, observador;
+GRANT USAGE ON SCHEMA public TO processador;
 
 CREATE TABLE filas (
     fila_id  TEXT PRIMARY KEY,
@@ -60,6 +60,18 @@ SELECT add_continuous_aggregate_policy('espera_por_minuto',
     start_offset => INTERVAL '1 hour', end_offset => INTERVAL '1 minute',
     schedule_interval => INTERVAL '1 minute');
 
+-- Transactional outbox do processador: a publicação que depende de uma decisão
+-- gravada (o resultado de uma leitura) entra aqui na mesma transação da
+-- decisão, e o processador a publica até o broker confirmar (publicado_em).
+CREATE TABLE saida (
+    evento_id    TEXT        PRIMARY KEY,
+    topico       TEXT        NOT NULL,
+    conteudo     TEXT        NOT NULL,
+    criado_em    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    publicado_em TIMESTAMPTZ
+);
+CREATE INDEX saida_pendente ON saida (criado_em) WHERE publicado_em IS NULL;
+
 GRANT SELECT, INSERT, UPDATE ON filas TO processador;
 GRANT SELECT, INSERT ON movimentos, estados TO processador;
-GRANT SELECT ON filas, movimentos, estados, movimentos_por_minuto, espera_por_minuto TO observador;
+GRANT SELECT, INSERT, UPDATE (publicado_em) ON saida TO processador;
