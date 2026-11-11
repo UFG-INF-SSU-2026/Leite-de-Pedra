@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { chamar, type EstadoRegistrado, type Movimento, type RegistroAuditoria } from '../api'
+import { chamar, type EstadoRegistrado, type Leitura, type Movimento, type RegistroAuditoria } from '../api'
 import { Chip, Erro, Filtro, Id, Paginacao, Tabela } from '../componentes'
 import { dataHora, useLista } from '../dados'
 
@@ -32,7 +32,7 @@ export function Leituras() {
   const [resultado, setResultado] = useState('')
   const [fila, setFila] = useState('')
   const [ingresso, setIngresso] = useState('')
-  const lista = useLista<Movimento>('/admin/leituras', { resultado, fila, ingresso })
+  const lista = useLista<Leitura>('/admin/leituras', { resultado, fila, ingresso })
   return (
     <>
       <div className="filtros">
@@ -42,13 +42,14 @@ export function Leituras() {
         <label>Ingresso<input id="ingresso-leituras" value={ingresso} onChange={e => setIngresso(e.target.value.toUpperCase())} /></label>
       </div>
       <Erro mensagem={lista.erro} />
-      <p className="nota">As fotos ficam no bucket por 1 dia. Cada foto aberta fica registrada na auditoria.</p>
-      <Tabela cabecalho={['Momento', 'Fila', 'Resultado', 'Motivo', 'Ingresso', 'Validador', 'Leitura', 'Foto']} vazio={!lista.dados?.itens.length}>
+      <p className="nota">Filtre por Aceito para ver quem passou. Fotos de entradas aceitas são apagadas na hora; as demais ficam no bucket por 1 dia. Cada foto aberta fica registrada na auditoria.</p>
+      <Tabela cabecalho={['Momento', 'Fila', 'Resultado', 'Dono do ingresso', 'Motivo', 'Ingresso', 'Validador', 'Leitura', 'Foto']} vazio={!lista.dados?.itens.length}>
         {lista.dados?.itens.map(m => (
           <tr key={m.eventId}>
             <td>{dataHora(m.momento)}</td><td>{m.filaId}</td><td><Chip valor={m.resultado} /></td>
+            <td>{m.dono ? <>{m.dono.nome} <span className="vazio">@{m.dono.login}</span></> : '–'}</td>
             <td>{m.motivo ? MOTIVOS[m.motivo] ?? m.motivo : '–'}</td><td><Id valor={m.ingressoId} /></td>
-            <td><Id valor={m.validadorId} /></td><td><Id valor={m.eventId} /></td><td><Foto eventId={m.eventId} /></td>
+            <td>{m.validadorLogin ?? <Id valor={m.validadorId} />}</td><td><Id valor={m.eventId} /></td><td><Foto eventId={m.eventId} /></td>
           </tr>
         ))}
       </Tabela>

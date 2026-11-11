@@ -84,8 +84,30 @@ def _repassar(caminho):
 
 
 # Ao vivo e histórico operacional: da observabilidade, que lê o broker e o banco.
-for _caminho in ("ao-vivo", "historico", "leituras", "movimentos", "estados"):
+for _caminho in ("ao-vivo", "historico", "movimentos", "estados"):
     rotas.add_api_route(f"/{_caminho}", _repassar(_caminho), methods=["GET"])
+
+
+@rotas.get("/leituras")
+def leituras(request: Request):
+    """Leituras da observabilidade com quem passou: o dono do ingresso e o login do validador.
+
+    A observabilidade não lê dados pessoais; eles vêm daqui, com o papel painel.
+    """
+    dados = da_observabilidade("leituras", request)
+    ingressos = {i["ingressoId"] for i in dados["itens"] if i["ingressoId"]}
+    validadores = {i["validadorId"] for i in dados["itens"] if i["validadorId"]}
+    with sessao_painel() as s:
+        donos = {ingresso_id: {"nome": nome, "login": login} for ingresso_id, nome, login in s.execute(
+            select(Ingresso.ingresso_id, Usuario.nome, Usuario.login)
+            .join(Usuario, Usuario.usuario_id == Ingresso.usuario_id)
+            .where(Ingresso.ingresso_id.in_(ingressos)))}
+        logins = dict(s.execute(select(Usuario.usuario_id, Usuario.login)
+                                .where(Usuario.usuario_id.in_(validadores))).all())
+    for item in dados["itens"]:
+        item["dono"] = donos.get(item["ingressoId"])
+        item["validadorLogin"] = logins.get(item["validadorId"])
+    return dados
 
 
 @rotas.get("/resumo")

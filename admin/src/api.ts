@@ -80,6 +80,8 @@ export type Movimento = {
   resultado: string | null; motivo: string | null; ingressoId: string | null; validadorId: string | null
   correlationId: string | null; origem: string | null
 }
+// Leitura com quem passou, completada pelo backend (só em /admin/leituras).
+export type Leitura = Movimento & { dono: { nome: string; login: string } | null; validadorLogin: string | null }
 export type EstadoRegistrado = { momento: string; filaId: string; semaforo: string; ocupacao: number; esperaSegundos: number | null }
 export type RegistroAuditoria = { momento: string; admin: string; acao: string; alvo: string; detalhe: string | null }
 export type Resumo = {

@@ -74,6 +74,7 @@ class AdminTest(unittest.TestCase):
             leituras = api.get("/admin/leituras", headers=adm).json()["itens"]
             self.assertEqual([(l["eventId"], l["resultado"], l["motivo"], l["validadorId"]) for l in leituras],
                              [("l2", "recusado", "rosto-nao-confere", "vera"), ("l1", "aceito", None, "vera")])
+            self.assertEqual((leituras[1]["dono"]["login"], leituras[1]["validadorLogin"]), ("ana", "vera"))
             self.assertEqual(api.get("/admin/movimentos?tipo=contagem", headers=adm).json()["total"], 1)
             self.assertEqual(api.get("/admin/estados", headers=adm).json()["itens"][0]["esperaSegundos"], 20)
             self.assertTrue(any(h["entradas"] == 1 for h in api.get("/admin/historico", headers=adm).json()))
