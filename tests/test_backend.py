@@ -18,7 +18,7 @@ class BackendTest(unittest.TestCase):
         motor = motor_teste()
         app_modulo = carregar_backend()
         rekognition.rostos.clear()
-        s3.chaves.clear()
+        s3.limpar()
 
         with TestClient(app_modulo.app) as api:
             cadastro = {"login": "ana", "senha": "senha-da-ana", "nome": "Ana", "foto": foto("ana")}
@@ -50,11 +50,12 @@ class BackendTest(unittest.TestCase):
                 "/sessoes", json={"login": "vera", "senha": "senha-da-vera"}).json()["token"]}
 
             publicadas = []
+            decisao = {"resultado": "aceito"}
 
             def processador_falso(topico, conteudo, qos):
                 publicadas.append((topico, json.loads(conteudo)))
                 app_modulo.receber_resultado(evento(
-                    "resultado", "processador", {"filaId": "fila-a", "resultado": "aceito"},
+                    "resultado", "processador", {"filaId": "fila-a", **decisao},
                     correlation_id=publicadas[-1][1]["correlation_id"]))
 
             with patch.object(app_modulo.cliente_mqtt, "is_connected", return_value=True), \
@@ -74,7 +75,11 @@ class BackendTest(unittest.TestCase):
                               dados["reconhecimento"], dados["usuarioReconhecido"]),
                              ("backend", "validador-1", ingresso, s3.chaves[0], "reconhecido", ana_id))
 
+            # Aceita, a foto sai do bucket na hora.
+            self.assertEqual(s3.apagadas, [s3.chaves[0]])
+
             # Rosto fora da coleção e falha da AWS também viram leitura: quem decide é o processador.
+            decisao["resultado"] = "recusado"
             with patch.object(app_modulo.cliente_mqtt, "is_connected", return_value=True), \
                  patch.object(app_modulo.cliente_mqtt, "publish", side_effect=processador_falso):
                 api.post("/leituras", json={**leitura, "foto": foto("desconhecido")}, headers=vera)
@@ -84,6 +89,8 @@ class BackendTest(unittest.TestCase):
                               for _, p in publicadas[1:]],
                              [("nao-reconhecido", False), ("falha", False)])
             self.assertTrue(s3.chaves[0].startswith("leituras/"))
+            # Recusadas ficam no bucket para o admin revisar.
+            self.assertEqual((len(s3.chaves), s3.apagadas), (3, [s3.chaves[0]]))
             self.assertEqual(api.get("/eu", headers=ana).json()["papel"], "cliente")
         motor.dispose()
 

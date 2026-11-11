@@ -37,12 +37,20 @@ class RekognitionFalso:
 class S3Falso:
     def __init__(self):
         self.chaves = []
+        self.apagadas = []
+
+    def limpar(self):
+        self.chaves.clear()
+        self.apagadas.clear()
 
     def put_object(self, Key, **_):
         self.chaves.append(Key)
 
+    def delete_object(self, Key, **_):
+        self.apagadas.append(Key)
+
     def head_object(self, Key, **_):
-        if Key not in self.chaves:
+        if Key not in self.chaves or Key in self.apagadas:
             raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
 
     def generate_presigned_url(self, _operacao, Params, ExpiresIn):

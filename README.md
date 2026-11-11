@@ -308,8 +308,8 @@ python3 -m backend                                       # https://127.0.0.1:844
 ```
 
 O perfil AWS do backend precisa de `IndexFaces`, `SearchFacesByImage`,
-`DeleteFaces` e `DescribeCollection` na coleção e de `s3:PutObject` em
-`leituras/*` no bucket. Para o celular na mesma rede, emita o certificado com o
+`DeleteFaces` e `DescribeCollection` na coleção e de `s3:PutObject` e
+`s3:DeleteObject` em `leituras/*` no bucket. Para o celular na mesma rede, emita o certificado com o
 IP da máquina, rode com `BACKEND_HOST=0.0.0.0` e instale a CA
 (`.local/mqtt/ca.crt`) no aparelho.
 
@@ -320,7 +320,7 @@ IP da máquina, rode com `BACKEND_HOST=0.0.0.0` e instale a CA
 | `GET /eu` | logado | dados da conta |
 | `POST /ingressos` | logado | compra (sem pagamento) e devolve o `ingressoId`, que vai no QR code |
 | `GET /ingressos` | logado | ingressos do usuário, usados ou não |
-| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3 (apagada em 1 dia), publica a leitura e espera até 10 s pelo resultado |
+| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s pelo resultado. Se for aceita, apaga a foto na hora; recusadas e indeterminadas ficam até a regra do bucket (1 dia), para o admin revisar |
 
 Ninguém escolhe o próprio papel pelo app: o papel `backend` do banco nem tem
 permissão para escrever a coluna `papel`. Validadores e admins são definidos

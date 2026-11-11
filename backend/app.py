@@ -210,6 +210,16 @@ def reconhecer(foto):
     return ("reconhecido", usuario) if usuario else ("nao-reconhecido", None)
 
 
+def apagar_foto(chave):
+    """Leitura aceita: a foto não serve mais para revisão. Recusadas e indeterminadas
+    ficam para o admin conferir até a regra do bucket apagá-las (1 dia)."""
+    try:
+        s3.delete_object(Bucket=BUCKET_FOTOS, Key=chave)
+    except Exception as erro:
+        # A entrada já foi decidida; a regra do bucket apaga a foto depois.
+        print(f"Falha ao apagar {chave}: {erro}")
+
+
 @app.post("/leituras")
 def ler_na_catraca(dados: Leitura, validador=Depends(sessao_de_validador)):
     foto = decodificar_foto(dados.foto)
@@ -239,5 +249,7 @@ def ler_na_catraca(dados: Leitura, validador=Depends(sessao_de_validador)):
         with trava_respostas:
             respostas.pop(correlacao, None)
     resultado = espera[1]
+    if resultado["resultado"] == "aceito":
+        apagar_foto(chave)
     return {"eventId": evento_id, "ingressoId": dados.ingressoId,
             "resultado": resultado["resultado"], "motivo": resultado.get("motivo")}

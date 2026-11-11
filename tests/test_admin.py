@@ -25,7 +25,7 @@ class AdminTest(unittest.TestCase):
     def test_dashboard(self):
         motor = motor_teste()
         app_modulo = carregar_backend()
-        s3.chaves.clear()
+        s3.limpar()
         cadastrar(motor, usuario("ana"), usuario("vera", "validador"), usuario("adm", "admin"),
                   usuario("adm2", "admin"))
         cadastrar(motor, Ingresso(ingresso_id="AAAA00000001", usuario_id="ana"),
