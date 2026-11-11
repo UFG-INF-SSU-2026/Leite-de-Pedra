@@ -207,6 +207,136 @@ usar a vazão observada. Assim o semáforo já reage ao crescimento da fila.
 
 ## Como rodar
 
+### Passo a passo para rodar localmente
+
+Do zero até a catraca funcionando, com tudo no Docker. As seções seguintes
+detalham cada parte.
+
+**Requisitos**
+
+| Para | Instale |
+|---|---|
+| Sistema | Docker com Compose (no macOS: `brew install colima docker docker-compose` e `colima start`), OpenSSL, Python 3.12+ |
+| Senhas do broker | `mosquitto` no host (`brew install mosquitto` ou `sudo apt install mosquitto mosquitto-clients`), que fornece o `mosquitto_passwd` |
+| Reconhecimento facial | uma conta AWS e o AWS CLI (`aws`) |
+| App e painel em desenvolvimento | Node 22.13+ e, no celular, o Expo Go |
+| ESP32 (opcional) | VS Code com as extensões Wokwi e PlatformIO |
+
+**1. Dependências Python**
+
+```
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+**2. AWS: bucket, coleção e perfil**
+
+Crie um perfil com as permissões listadas em [Backend do app](#backend-do-app)
+e, com ele, o bucket privado das fotos e a coleção de rostos:
+
+```
+aws configure --profile leite-de-pedra-admin
+export AWS_PROFILE=leite-de-pedra-admin AWS_DEFAULT_REGION=us-east-1
+aws s3api create-bucket --bucket <nome-do-bucket>
+aws s3api put-public-access-block --bucket <nome-do-bucket> \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws s3api put-bucket-lifecycle-configuration --bucket <nome-do-bucket> --lifecycle-configuration \
+  '{"Rules":[{"ID":"leituras-1-dia","Filter":{"Prefix":"leituras/"},"Status":"Enabled","Expiration":{"Days":1}}]}'
+aws rekognition create-collection --collection-id leite-de-pedra
+```
+
+A regra de 1 dia apaga as fotos das leituras recusadas e indeterminadas; as
+aceitas o backend apaga na hora.
+
+**3. Segredos locais**
+
+Gera a CA, os certificados e as senhas de cada papel em `.local/` (fora do
+Git). Cada script se recusa a sobrescrever o que já existe.
+
+```
+./broker/configurar-seguranca.sh
+./banco/configurar-banco.sh
+./backend/configurar-backend.sh <ip-da-máquina-na-rede>   # o IP só é preciso para o app no celular
+.venv/bin/python produtor/preparar-wokwi.py                # só se for usar os ESP32
+```
+
+**4. Configuração do Docker**
+
+```
+./docker/preparar.sh
+```
+
+O script cria o `.env` (modelo comentado em [`.env.example`](.env.example)).
+Preencha `FOTOS_BUCKET` com o nome do bucket. Para usar o app num celular, mude
+`BACKEND_ENDERECO` para `0.0.0.0`.
+
+**5. Subir o sistema**
+
+```
+docker compose up -d --build
+docker compose ps                     # banco, broker, processador, backend e observabilidade "running"
+docker compose logs -f backend        # deve mostrar "Backend conectado ao broker"
+```
+
+O backend encerra na partida se não alcançar a coleção da AWS: confira o
+perfil e o `.env` se ele reiniciar em loop.
+
+**6. Contas de teste**
+
+```
+export AWS_PROFILE=leite-de-pedra-admin AWS_DEFAULT_REGION=us-east-1 REKOGNITION_COLECAO=leite-de-pedra
+.venv/bin/python banco/seed.py --foto-cliente <foto-do-rosto.jpg>
+```
+
+Cria `cliente` (com um ingresso), `validador` e `admin`, todos com a senha
+`123`. A foto vai para o Rekognition como rosto do `cliente`; use a de quem
+vai passar na catraca na demonstração.
+
+**7. Painel e catraca no computador**
+
+Importe `.local/mqtt/ca.crt` como autoridade confiável no navegador (ou no
+Acesso às Chaves do macOS) e abra **https://localhost:8444/painel/** no Chrome
+ou no Edge.
+
+- `admin` / `123`: painel de administração.
+- `validador` / `123`: catraca com a webcam. Ela lê o QR do ingresso e depois o
+  rosto. A câmera só abre em `https` ou em `localhost`, e a leitura de QR usa o
+  leitor nativo do Chrome e do Edge; nos outros navegadores, digite o código.
+
+**8. App no celular**
+
+```
+cd mobile
+npm install
+EXPO_PUBLIC_API_URL=https://<ip-da-máquina>:8444 npx expo start --clear
+```
+
+Leia o QR code com o Expo Go. O celular precisa estar no mesmo Wi-Fi da
+máquina, sem VPN, e confiar na CA do projeto (no iPhone: instale o perfil e
+ative a confiança total em Ajustes > Geral > Sobre > Ajustes de Confiança de
+Certificados). Detalhes em [`mobile/README.md`](mobile/README.md).
+
+**9. ESP32 no Wokwi (opcional)**
+
+Veja [Execução sem Docker](#execução-sem-docker) para compilar e iniciar as
+duas simulações; elas usam o broker publicado em `host.wokwi.internal:8883`.
+
+**10. Testes**
+
+```
+.venv/bin/python -m unittest discover -s tests   # precisa do banco no ar
+```
+
+**Problemas comuns**
+
+| Sintoma | Causa e solução |
+|---|---|
+| App mostra "Sem conexão com o servidor" | O pedido não chegou ao backend. Confira se `EXPO_PUBLIC_API_URL` tem o IP da máquina (não `localhost`), se o Safari do celular abre `https://<ip>:8444/eu` sem aviso de certificado e se não há VPN ligada no celular. |
+| Celular não confia na CA e não dá para resolver na hora | Só em desenvolvimento: `BACKEND_SEM_TLS=1` no `.env`, `docker compose up -d backend` e `EXPO_PUBLIC_API_URL=http://<ip>:8444`. Senhas, tokens e fotos passam sem criptografia; apague a linha depois. |
+| Painel pelo Vite (`npm run dev`) responde HTTP 500 | O Vite repassa a API para `https://localhost:8444`. Com o backend em HTTP, rode `BACKEND_URL=http://localhost:8444 npm run dev`. |
+| Catraca do painel não abre a câmera | O painel foi aberto por um IP. Use `localhost` na própria máquina. |
+| Certificado não vale para o IP | O IP da máquina mudou. Emita de novo o certificado do backend com o IP novo e reinicie o backend. |
+
 ### Segurança
 
 Cada componente possui uma identidade MQTT diferente. O broker autentica essas
@@ -340,16 +470,18 @@ cd admin && npm install && npm run build   # gera admin/dist, que o backend serv
 ```
 
 Abra `https://localhost:8444/painel/` (importe `.local/mqtt/ca.crt` no navegador
-como confiável) e entre com uma conta de papel `admin`. Para mexer no front,
-`npm run dev` sobe o Vite em `http://localhost:5173/painel/`, repassando a API
-ao backend com a CA do projeto.
+como confiável) e entre com uma conta de papel `admin`. Uma conta de papel
+`validador` vê só a catraca, que usa a webcam do computador para ler o QR e o
+rosto. Para mexer no front, `npm run dev` sobe o Vite em
+`http://localhost:5173/painel/`, repassando a API ao backend com a CA do
+projeto (`BACKEND_URL` muda o endereço do backend).
 
 | Seção | O que mostra |
 |---|---|
 | Visão geral | totais de usuários, ingressos, leituras e pessoas nas filas; cada fila ao vivo (semáforo, ocupação, espera, recomendação, enlace do ESP32, última leitura), as últimas mensagens do broker com a latência e o histórico por minuto |
 | Usuários | todos os usuários (sem senha), com busca e filtro; troca de papel |
 | Ingressos | todos os ingressos e a situação de cada um; cancelamento de ingresso disponível, com motivo |
-| Leituras | cada decisão do processador: ingresso, validador, resultado e motivo; a foto abre por um link de 5 minutos enquanto está no bucket (1 dia) |
+| Leituras | cada decisão do processador: dono do ingresso (nome e login), ingresso, validador, resultado e motivo; a foto das recusadas e indeterminadas abre por um link de 5 minutos enquanto está no bucket (1 dia) |
 | Movimentos e Estados | todo evento gravado e todo estado publicado |
 | Auditoria | quem trocou papel, cancelou ingresso ou abriu uma foto, e quando |
 
