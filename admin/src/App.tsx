@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { entrar, quandoPerderSessao, token } from './api'
 import { Erro } from './componentes'
+import { Catraca } from './paginas/Catraca'
 import { Ingressos } from './paginas/Ingressos'
 import { Auditoria, Estados, Leituras, Movimentos } from './paginas/Registros'
 import { Usuarios } from './paginas/Usuarios'
@@ -56,7 +57,8 @@ function Login({ aoEntrar }: { aoEntrar: () => void }) {
     <main className="login">
       <form onSubmit={enviar}>
         <p className="marca">Leite de Pedra</p>
-        <h1>Painel de administração</h1>
+        <h1>Painel e catraca</h1>
+        <p className="nota">Admin vê o painel; validador vê a catraca com a câmera deste computador.</p>
         <label>Login<input id="login" autoComplete="username" required value={login} onChange={e => setLogin(e.target.value)} /></label>
         <label>Senha<input id="senha" type="password" autoComplete="current-password" required value={senha} onChange={e => setSenha(e.target.value)} /></label>
         <Erro mensagem={erro} />
@@ -82,6 +84,22 @@ export default function App() {
   function sair() {
     token.apagar()
     setLogado(false)
+  }
+
+  if (token.papel() === 'validador') {
+    return (
+      <div className="app">
+        <header className="topo">
+          <p className="marca">Leite de Pedra <span>· catraca</span></p>
+          <nav aria-label="Seções" />
+          <button type="button" className="sair" onClick={sair}>Sair</button>
+        </header>
+        <main>
+          <h1>Catraca</h1>
+          <Catraca />
+        </main>
+      </div>
+    )
   }
 
   return (

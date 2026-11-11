@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { Redirect, router, Stack } from 'expo-router'
 import * as SecureStore from 'expo-secure-store'
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { CapturaRosto, PedirCamera } from '@/CapturaRosto'
 import { useSessao } from '@/sessao'
 import { Botao, Campo, Erro, Paragrafo, Tela, Titulo, useCores } from '@/ui'
@@ -15,7 +15,10 @@ const FILAS = ['fila-a', 'fila-b']
 const CHAVE_FILA = 'catraca.fila'
 const CODIGO_INGRESSO = /^[A-F0-9]{12}$/
 
-type Resultado = { resultado: 'aceito' | 'recusado' | 'indeterminado'; motivo: string | null; ingressoId: string }
+type Resultado = {
+  resultado: 'aceito' | 'recusado' | 'indeterminado'; motivo: string | null; ingressoId: string
+  pessoa?: { nome: string; login: string }  // só quando aceito: o dono do ingresso
+}
 
 const MOTIVOS: Record<string, string> = {
   'validador-nao-autorizado': 'Sua conta não está autorizada a validar. Fale com a organização.',
@@ -33,6 +36,7 @@ export default function Catraca() {
   const [ingresso, setIngresso] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState<Resultado | null>(null)
+  const [fotoEnviada, setFotoEnviada] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
@@ -50,12 +54,14 @@ export default function Catraca() {
   function proxima() {
     setIngresso(null)
     setResultado(null)
+    setFotoEnviada(null)
     setErro(null)
   }
 
   async function validar(foto: string) {
     setEnviando(true)
     setErro(null)
+    setFotoEnviada(foto)
     try {
       setResultado(await api<Resultado>('/leituras', { metodo: 'POST', corpo: { ingressoId: ingresso, filaId: fila, foto } }))
     } catch (e) {
@@ -75,7 +81,7 @@ export default function Catraca() {
     }} />
   )
 
-  if (resultado) return <>{cabecalho}<TelaResultado resultado={resultado} aoContinuar={proxima} /></>
+  if (resultado) return <>{cabecalho}<TelaResultado resultado={resultado} foto={fotoEnviada} aoContinuar={proxima} /></>
 
   return (
     <Tela>
@@ -146,7 +152,7 @@ function LerIngresso({ aoLer }: { aoLer: (codigo: string) => void }) {
   )
 }
 
-function TelaResultado({ resultado, aoContinuar }: { resultado: Resultado; aoContinuar: () => void }) {
+function TelaResultado({ resultado, foto, aoContinuar }: { resultado: Resultado; foto: string | null; aoContinuar: () => void }) {
   const aparencia = {
     aceito: { fundo: '#1d7a46', titulo: 'Liberar entrada' },
     recusado: { fundo: '#b3261e', titulo: 'Não liberar' },
@@ -154,7 +160,15 @@ function TelaResultado({ resultado, aoContinuar }: { resultado: Resultado; aoCon
   }[resultado.resultado]
   return (
     <View style={[estilos.resultado, { backgroundColor: aparencia.fundo }]} accessibilityLiveRegion="assertive">
+      {foto && <Image source={{ uri: `data:image/jpg;base64,${foto}` }} style={estilos.rosto}
+        accessibilityLabel="Rosto capturado na catraca" />}
       <Text style={estilos.resultadoTitulo}>{aparencia.titulo}</Text>
+      {resultado.pessoa && (
+        <View style={{ gap: 2 }}>
+          <Text style={estilos.pessoaNome}>{resultado.pessoa.nome}</Text>
+          <Text style={[estilos.resultadoTexto, { opacity: 0.85 }]}>@{resultado.pessoa.login}</Text>
+        </View>
+      )}
       <Text style={estilos.resultadoTexto}>
         {resultado.resultado === 'aceito'
           ? 'O rosto confere com o dono do ingresso. Ele foi marcado como usado.'
@@ -174,6 +188,8 @@ const estilos = StyleSheet.create({
   mira: { width: '60%', aspectRatio: 1, borderWidth: 3, borderColor: '#ffffff', borderRadius: 16, opacity: 0.85 },
   resultado: { flex: 1, padding: 28, justifyContent: 'center', gap: 16 },
   resultadoTitulo: { color: '#ffffff', fontSize: 36, fontWeight: '800' },
+  rosto: { width: 160, aspectRatio: 3 / 4, borderRadius: 12, borderWidth: 3, borderColor: '#ffffff' },
+  pessoaNome: { color: '#ffffff', fontSize: 26, fontWeight: '700' },
   resultadoTexto: { color: '#ffffff', fontSize: 18, lineHeight: 26 },
   resultadoBotao: { backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 16 },
 })

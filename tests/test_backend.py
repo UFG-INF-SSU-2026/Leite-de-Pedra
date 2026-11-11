@@ -64,6 +64,7 @@ class BackendTest(unittest.TestCase):
             self.assertEqual(resposta.status_code, 200)
             self.assertEqual((resposta.json()["resultado"], resposta.json()["ingressoId"]),
                              ("aceito", ingresso))
+            self.assertEqual(resposta.json()["pessoa"], {"nome": "Ana", "login": "ana"})
             topico, enviada = publicadas[0]
             self.assertEqual(topico, "fila/fila-a/leitura")
             self.assertEqual(ler_evento(topico, json.dumps(enviada)), enviada)

@@ -2,6 +2,7 @@
 // (mesma origem), então as rotas são relativas e não há CORS.
 
 const CHAVE_TOKEN = 'painel.token'
+const CHAVE_PAPEL = 'painel.papel'
 
 export class ErroApi extends Error {
   status: number
@@ -15,7 +16,12 @@ export class ErroApi extends Error {
 export const token = {
   ler: () => sessionStorage.getItem(CHAVE_TOKEN),
   salvar: (valor: string) => sessionStorage.setItem(CHAVE_TOKEN, valor),
-  apagar: () => sessionStorage.removeItem(CHAVE_TOKEN),
+  apagar: () => {
+    sessionStorage.removeItem(CHAVE_TOKEN)
+    sessionStorage.removeItem(CHAVE_PAPEL)
+  },
+  // Só escolhe a tela (painel ou catraca); quem confere o papel é o backend.
+  papel: () => sessionStorage.getItem(CHAVE_PAPEL),
 }
 
 let aoPerderSessao = () => {}
@@ -49,8 +55,10 @@ export async function chamar<T>(caminho: string, opcoes: { metodo?: string; corp
 
 export async function entrar(login: string, senha: string) {
   const dados = await chamar<{ token: string; papel: string }>('/sessoes', { metodo: 'POST', corpo: { login, senha } })
-  if (dados.papel !== 'admin') throw new ErroApi(403, 'Esta conta não é de administrador.')
+  if (dados.papel !== 'admin' && dados.papel !== 'validador')
+    throw new ErroApi(403, 'Esta conta não é de administrador nem de validador.')
   token.salvar(dados.token)
+  sessionStorage.setItem(CHAVE_PAPEL, dados.papel)
 }
 
 export function consulta(parametros: Record<string, string | number | undefined>) {

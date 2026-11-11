@@ -42,7 +42,7 @@ PASTA_DASHBOARD = RAIZ / "admin" / "dist"  # build da SPA (cd admin && npm run b
 
 # A SPA só carrega o que é dela; as fotos das leituras vêm do S3 por URL pré-assinada.
 CABECALHOS_DASHBOARD = {
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' https://*.amazonaws.com; "
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https://*.amazonaws.com; "
                                "style-src 'self'; script-src 'self'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
@@ -249,7 +249,13 @@ def ler_na_catraca(dados: Leitura, validador=Depends(sessao_de_validador)):
         with trava_respostas:
             respostas.pop(correlacao, None)
     resultado = espera[1]
+    resposta = {"eventId": evento_id, "ingressoId": dados.ingressoId,
+                "resultado": resultado["resultado"], "motivo": resultado.get("motivo")}
     if resultado["resultado"] == "aceito":
         apagar_foto(chave)
-    return {"eventId": evento_id, "ingressoId": dados.ingressoId,
-            "resultado": resultado["resultado"], "motivo": resultado.get("motivo")}
+        # Aceito, o rosto reconhecido é o do dono do ingresso: o validador confere quem entrou.
+        with sessao_backend() as s:
+            pessoa = s.get(Usuario, usuario) if usuario else None
+        if pessoa:
+            resposta["pessoa"] = {"nome": pessoa.nome, "login": pessoa.login}
+    return resposta
