@@ -191,12 +191,15 @@ sequenceDiagram
     V->>K: POST /leituras {ingressoId, filaId, foto}
     K->>R: SearchFacesByImage(coleção, foto)
     R-->>K: usuário reconhecido (ou nenhum, ou falha)
-    K->>S3: guarda a foto (auditoria, 1 dia)
+    K->>S3: guarda a foto
     K->>B: fila/fila-a/leitura {event_id, correlation_id, reconhecimento}
     B->>C: leitura (só o processador pode ler)
     C->>C: validador? dono do ingresso? já usado?
     C->>B: fila/fila-a/resultado {correlation_id, resultado}
     B->>K: resultado
+    opt aceito
+        K->>S3: apaga a foto
+    end
     K-->>V: resultado
     B->>O: resultado
     alt aceito
@@ -234,10 +237,10 @@ Cada próximo passo da tabela abaixo só é concluído quando cumpre as
 | Parte | Hoje | Próximo passo |
 |---|---|---|
 | Reconhecimento | o backend chama `SearchFacesByImage` (95%) e publica o usuário reconhecido; o processador confere o papel do validador no banco e se o rosto é do dono do ingresso, e marca o ingresso na mesma transação do resultado | — |
-| Foto | o backend recebe a foto do app e a guarda em `leituras/` no S3 (apagada em 1 dia pela regra do bucket) | apagar logo após a avaliação |
-| Usuários e ingressos | `backend/` (FastAPI): cadastro com login, senha e rosto, compra de ingressos, sessão JWT; papéis `validador` e `admin` definidos por um admin no dashboard (o primeiro por `banco/definir-papel.sh`) | pagamento e eventos |
-| Validador | app em `mobile/` (só a tela inicial); fala com o backend por HTTPS, sem credencial MQTT ou AWS no aparelho. A página `validador/` virou console da demo | telas de login, QR e câmera |
-| Dashboard | SPA React em `admin/`, servida pelo backend em `/painel/`; API `/admin/*` com o papel admin conferido a cada requisição: o operacional repassado da observabilidade (papel `observador`), a gestão com o papel `painel` | gráficos do histórico |
+| Foto | o backend guarda a foto em `leituras/` no S3 e a apaga assim que a leitura é **aceita**. Recusadas e indeterminadas ficam para o admin revisar até a regra do bucket apagá-las (1 dia), assim como a de uma leitura cujo resultado não chegou em 10 s | — |
+| Usuários e ingressos | `backend/` (FastAPI): cadastro com login, senha e rosto, compra de ingressos, sessão JWT; papéis `validador` e `admin` definidos por um admin no dashboard (o primeiro por `banco/definir-papel.sh`) | pagamento e eventos (fora do escopo atual: a compra não cobra e há um evento só) |
+| App mobile | `mobile/` (Expo): cliente cria conta com a foto do rosto, entra, compra ingressos e mostra o QR; validador lê o QR e captura o rosto na tela da catraca. Fala só com o backend, por HTTPS, sem credencial MQTT ou AWS no aparelho. A página `validador/` virou console da demo | — |
+| Dashboard | SPA React em `admin/`, servida pelo backend em `/painel/`; API `/admin/*` com o papel admin conferido a cada requisição: o operacional repassado da observabilidade (papel `observador`), a gestão com o papel `painel`. O histórico por minuto tem gráficos de espera média e de entradas por fila | — |
 
 ## Segurança e permissões
 
@@ -259,14 +262,16 @@ desligada para facilitar um teste ou uma demonstração.
 | 7 | **Uma única autoridade.** Só o processador publica estado, recomendação e resultado; quem envia dados não decide sobre eles. | ACL: só o `processador` escreve em `estado`, `recomendacao` e `resultado`. |
 | 8 | **Biometria mínima.** A foto nunca passa pelo broker nem é gravada fora do bucket; só a referência circula, e só o backend a usa (no Rekognition e no link temporário do admin). | ACL: só o `backend` publica `fila/+/leitura`; o `processador` e o `observador` leem, e a observabilidade descarta `fotoRef` antes de mostrar a tentativa. |
 
-### Como as regras se aplicam aos próximos componentes
+### Como as regras se aplicam aos demais componentes
 
-| Componente | O que ele precisa ter |
+| Componente | Como cumpre as regras |
 |---|---|
-| **App mobile (validador)** | Usuário MQTT `validador` com senha própria por aparelho ou por operador; TLS validando a CA (inclusive em MQTT sobre WebSockets, que precisa de `listener` com TLS no Mosquitto); nenhuma credencial AWS no aparelho, só URLs pré-assinadas de upload e de curta duração; nenhuma foto guardada no celular depois do envio. |
-| **Painel web (observador)** (implementado) | Usuário MQTT `observador` e papel `observador` do banco, ambos somente leitura e sem acesso a `fila/+/leitura`; recebe os dados ao vivo pelo broker e só o histórico do banco; descarta mensagem malformada ou com `filaId` diferente do tópico; login com senha em hash scrypt e sessão JWT HS256 de 1 h em cookie `HttpOnly`, `Secure` e `SameSite=Strict` (algoritmo fixo, `none` recusado); HTTPS com TLS 1.2 ou superior e certificado da CA do projeto, só em `127.0.0.1:8443`; CSP que só aceita o próprio script e a própria origem e templates Jinja2 com escape automático; credenciais do broker e do banco só no servidor, nunca no navegador. |
-| **TimescaleDB** (implementado) | Conexão com TLS obrigatório (`sslmode=verify-full`); um usuário de escrita só para o processador e um usuário somente leitura para o painel; senha fora do Git; banco sem porta exposta à internet. Detalhes em [Persistência com TimescaleDB](#persistência-com-timescaledb). |
-| **AWS Rekognition e S3** | Credenciais só no backend, com uma política IAM que permita apenas o que ele usa na coleção do evento (`IndexFaces`, `SearchFacesByImage`, `DeleteFaces`, `DescribeCollection`) e gravação e leitura no bucket das fotos; bucket privado e cifrado; fotos apagadas logo após a avaliação; nenhuma chave da AWS no Git nem no app. |
+| **App mobile** | Fala só com o backend, por HTTPS validando a CA do projeto; nenhuma credencial MQTT ou AWS no aparelho. Sessão JWT HS256 de 8 h (um turno) no cabeçalho `Authorization`; ler na catraca exige o papel `validador`, e o processador confere esse papel de novo no banco. A foto vai no corpo da requisição e não é guardada no celular. |
+| **Backend** | HTTPS com TLS 1.2 ou superior; usuário MQTT `backend`, que só publica `fila/+/leitura` e só lê `fila/+/resultado`; papéis `backend` (rotas do app) e `painel` (rotas de admin) no banco, cada um só com as colunas que usa; corpo limitado a 8 MB; atraso de 1 s após login recusado; senhas em hash. |
+| **Dashboard de admin** | SPA servida pelo próprio backend (mesma origem, sem CORS); papel `admin` conferido no banco a cada requisição, então um admin rebaixado perde o acesso na hora; token em `sessionStorage`, que some quando a aba fecha; CSP que só aceita o próprio script e estilo e imagens do S3; foto só por link pré-assinado de 5 minutos, com cada abertura registrada na auditoria. |
+| **Observabilidade** | Usuário MQTT `observador` e papel `observador` do banco, ambos só de leitura; descarta a referência da foto antes de mostrar uma leitura; API interna sem autenticação e sem TLS, por isso só na rede interna do compose, sem porta publicada: quem a expõe é o backend, depois de conferir o admin. |
+| **TimescaleDB** | Conexão com TLS obrigatório (`sslmode=verify-full`); um papel por serviço, com permissão por coluna; senha fora do Git; porta publicada só em `127.0.0.1`. Detalhes em [Persistência com TimescaleDB](#persistência-com-timescaledb). |
+| **AWS Rekognition e S3** | Credenciais só no backend, com uma política IAM que permita apenas o que ele usa: `IndexFaces`, `SearchFacesByImage`, `DeleteFaces` e `DescribeCollection` na coleção, e `PutObject`, `GetObject` e `DeleteObject` em `leituras/*` no bucket; bucket privado; foto de leitura aceita apagada na hora e as demais em 1 dia; nenhuma chave da AWS no Git nem no app. |
 
 ### Permissões no broker
 
@@ -319,10 +324,38 @@ flowchart LR
 
 ## Persistência com TimescaleDB
 
-O TimescaleDB fica **no processador**: só ele grava. Ele é o único componente
-que valida e deduplica os eventos; um serviço separado que assinasse os
-tópicos gravaria mensagens repetidas ou forjadas. A configuração está em
-`banco/` e o acesso em `estado_filas.py`.
+Os eventos das filas são gravados **só pelo processador**. Ele é o único
+componente que valida e deduplica os eventos; um serviço separado que
+assinasse os tópicos gravaria mensagens repetidas ou forjadas. O backend grava
+usuários e ingressos novos, e o dashboard (papel `painel`) grava papéis,
+cancelamentos e auditoria. A configuração está em `banco/` e o acesso aos
+eventos em `estado_filas.py`.
+
+### Um banco para todos os serviços
+
+Vários serviços num banco só é o anti-padrão *shared database* dos
+microsserviços. Ele só causa problema quando os serviços são independentes, e
+aqui eles não são:
+
+- **A decisão da catraca precisa disso.** `registrar_resultado`
+  (`estado_filas.py`) trava o ingresso com `FOR UPDATE` e o marca como usado,
+  grava o movimento e grava a mensagem na `saida`, tudo numa única transação.
+  Assim um ingresso nunca vale duas vezes e nenhum resultado decidido se perde.
+  Com dois bancos, isso viraria saga ou commit em duas fases.
+- **Os serviços não são independentes.** Processador, backend e observabilidade
+  saem da mesma imagem, do mesmo repositório e do mesmo `modelos.py`. Uma
+  mudança no esquema já obriga a subir tudo junto.
+- **Cada dado tem um dono.** Os papéis e as permissões por coluna definem quem
+  escreve o quê. `ingressos` recebe escrita de três papéis, cada um nas
+  próprias colunas. Na corrida entre cancelar e usar um ingresso, os dois
+  lados travam a linha e conferem o estado antes de gravar.
+- **A biometria já está fora.** As fotos ficam no S3; o banco guarda só o
+  `face_id` do Rekognition.
+
+Separar passaria a valer se os serviços tivessem deploy ou equipes
+diferentes, se a carga de um derrubasse os outros (o primeiro passo seria uma
+réplica de leitura para a observabilidade) ou se alguma exigência de
+compliance obrigasse a isolar os dados pessoais.
 
 ```mermaid
 flowchart LR
@@ -439,8 +472,8 @@ O banco cumpre as [regras obrigatórias](#regras-obrigatórias-de-segurança):
 | Regra | Como o banco cumpre |
 |---|---|
 | Só TLS | `pg_hba.conf` só tem linhas `hostssl`; TLS 1.2 ou superior; os clientes usam `sslmode=verify-full` com a CA do projeto. |
-| Uma identidade por componente | papéis `processador` e `observador`, com senha SCRAM própria; o superusuário `postgres` só entra pelo socket local do contêiner. |
-| Menor privilégio | `processador` lê, insere e atualiza, mas não apaga, não faz `TRUNCATE` e não cria tabelas; `observador` só lê. |
+| Uma identidade por componente | papéis `processador`, `backend`, `painel` e `observador`, cada um com senha SCRAM própria; o superusuário `postgres` só entra pelo socket local do contêiner. |
+| Menor privilégio | `processador` lê, insere e atualiza, mas não apaga, não faz `TRUNCATE` e não cria tabelas; `backend` só cria usuários (sem escolher o papel) e ingressos não usados; `painel` só muda papel, cancela ingresso e registra auditoria; `observador` só lê. |
 | Segredo fora do Git | senhas, certificado e chave em `.local/banco`, gerados por `banco/configurar-banco.sh`. |
 | Desconfiar do que chega | o processador valida o envelope do contrato (tópico, `event_type`, ids e `timestamp`) antes de gravar; o esquema tem `CHECK` em `tipo`, `resultado` e `semaforo`. |
 | Idempotência | `ON CONFLICT DO NOTHING` na chave de `movimentos`. |
