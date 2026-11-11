@@ -13,6 +13,68 @@ function Numero({ rotulo, valor, detalhe }: { rotulo: string; valor: number; det
   )
 }
 
+const LARGURA = 640, ALTURA = 170, MARGEM = { esq: 40, dir: 12, topo: 10, base: 24 }
+
+// Uma linha por fila ao longo dos minutos. SVG puro e cores por classe (a CSP não aceita estilo inline).
+function Grafico({ titulo, unidade, dados, valor }: {
+  titulo: string; unidade: string; dados: MinutoHistorico[]; valor: (m: MinutoHistorico) => number | null
+}) {
+  const filas = [...new Set(dados.map(d => d.filaId))].sort()
+  const minutos = [...new Set(dados.map(d => d.minuto))].sort((a, b) => Date.parse(a) - Date.parse(b))
+  const maximo = Math.max(1, ...dados.map(d => valor(d) ?? 0))
+  const largura = LARGURA - MARGEM.esq - MARGEM.dir, altura = ALTURA - MARGEM.topo - MARGEM.base
+  const x = (i: number) => MARGEM.esq + (minutos.length < 2 ? largura / 2 : i * largura / (minutos.length - 1))
+  const y = (v: number) => MARGEM.topo + altura * (1 - v / maximo)
+
+  // Pontos [x, y, continua a linha?] da fila; minuto sem dado interrompe a linha.
+  const pontos = (fila: string) => {
+    const porMinuto = new Map(dados.filter(d => d.filaId === fila).map(d => [d.minuto, valor(d)]))
+    const lista: [number, number, boolean][] = []
+    let anterior = false
+    minutos.forEach((m, i) => {
+      const v = porMinuto.get(m)
+      if (v != null) lista.push([x(i), y(v), anterior])
+      anterior = v != null
+    })
+    return lista
+  }
+
+  return (
+    <figure className="grafico">
+      <figcaption>
+        {titulo}
+        <span className="legenda">
+          {filas.map((f, i) => <span key={f}><i className={`serie-${i % 4}`} />{f}</span>)}
+        </span>
+      </figcaption>
+      <svg viewBox={`0 0 ${LARGURA} ${ALTURA}`} role="img" aria-label={`${titulo} por minuto, por fila`}>
+        {[0, maximo / 2, maximo].map(v => (
+          <g key={v}>
+            <line className="grade" x1={MARGEM.esq} x2={LARGURA - MARGEM.dir} y1={y(v)} y2={y(v)} />
+            <text className="eixo" x={MARGEM.esq - 6} y={y(v) + 4} textAnchor="end">{Math.round(v)}{unidade}</text>
+          </g>
+        ))}
+        {minutos.length > 0 && <>
+          <text className="eixo" x={MARGEM.esq} y={ALTURA - 6}>{hora(minutos[0])}</text>
+          <text className="eixo" x={LARGURA - MARGEM.dir} y={ALTURA - 6} textAnchor="end">{hora(minutos[minutos.length - 1])}</text>
+        </>}
+        {filas.map((f, i) => {
+          const lista = pontos(f)
+          const d = lista.map(([px, py, segue]) => `${segue ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join(' ')
+          // Ponto sem vizinho não vira linha: marca com um círculo.
+          const soltos = lista.filter(([, , segue], k) => !segue && !lista[k + 1]?.[2])
+          return (
+            <g key={f} className={`serie-${i % 4}`}>
+              <path className="linha" d={d} />
+              {soltos.map(([px, py]) => <circle key={px} cx={px} cy={py} r={3} />)}
+            </g>
+          )
+        })}
+      </svg>
+    </figure>
+  )
+}
+
 export function VisaoGeral() {
   const resumo = useDados<Resumo>('/admin/resumo', 10000)
   const agora = useDados<AoVivo>('/admin/ao-vivo', 2000)
@@ -94,6 +156,12 @@ export function VisaoGeral() {
           <option value="30">30 min</option><option value="60">1 h</option><option value="360">6 h</option><option value="1440">24 h</option>
         </select>
       </h2>
+      {!!historico.dados?.length && (
+        <div className="graficos">
+          <Grafico titulo="Espera média" unidade=" s" dados={historico.dados} valor={h => h.esperaMedia} />
+          <Grafico titulo="Entradas por minuto" unidade="" dados={historico.dados} valor={h => h.entradas} />
+        </div>
+      )}
       <Tabela cabecalho={['Minuto', 'Fila', 'Entradas', 'Saídas', 'Aceitos', 'Recusados', 'Indet.', 'Espera média', 'Espera máx.', 'Ocupação máx.']}
         vazio={!historico.dados?.length}>
         {historico.dados?.map(h => (

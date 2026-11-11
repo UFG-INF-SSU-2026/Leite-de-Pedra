@@ -10,6 +10,7 @@
   --amarelo: #8a5a00; --amarelo-fundo: #fbedd0;
   --vermelho: #b3261e; --vermelho-fundo: #f9dedc;
   --neutro-fundo: #e6e9e8;
+  --serie-1: #2f62b5; --serie-2: #a24bb0; --serie-3: #b0651f;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 15px;
   line-height: 1.5;
@@ -23,6 +24,7 @@
     --linha: #2b3833; --destaque: #5fc4a8;
     --verde: #6fd39a; --verde-fundo: #143524; --amarelo: #e9b452; --amarelo-fundo: #3a2b0d;
     --vermelho: #f2938a; --vermelho-fundo: #3d1815; --neutro-fundo: #26302c;
+    --serie-1: #7fa8ef; --serie-2: #d38ee0; --serie-3: #e3a66b;
     color-scheme: dark;
   }
 }
@@ -99,3 +101,19 @@ td.json code { white-space: nowrap; }
 .confirmacao p { margin: 0; }
 .acoes { display: flex; gap: 8px; }
 select.inline { font-size: 13px; font-weight: 400; }
+
+.graficos { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.grafico { margin: 0; background: var(--superficie); border: 1px solid var(--linha); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.grafico figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.grafico svg { display: block; width: 100%; height: auto; }
+.grafico .grade { stroke: var(--linha); stroke-width: 1; }
+.grafico .eixo { fill: var(--suave); font-size: 11px; font-variant-numeric: tabular-nums; }
+.grafico .linha { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.legenda { display: flex; gap: 12px; font-weight: 400; color: var(--suave); font-size: 13px; }
+.legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.legenda i { width: 14px; height: 3px; border-radius: 2px; background: currentColor; }
+.serie-0 { color: var(--destaque); stroke: var(--destaque); fill: var(--destaque); }
+.serie-1 { color: var(--serie-1); stroke: var(--serie-1); fill: var(--serie-1); }
+.serie-2 { color: var(--serie-2); stroke: var(--serie-2); fill: var(--serie-2); }
+.serie-3 { color: var(--serie-3); stroke: var(--serie-3); fill: var(--serie-3); }
+
