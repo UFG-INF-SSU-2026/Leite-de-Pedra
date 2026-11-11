@@ -112,6 +112,8 @@ services:
       REKOGNITION_COLECAO: ${REKOGNITION_COLECAO:-}
       FOTOS_BUCKET: ${FOTOS_BUCKET:-}
       BACKEND_HOST: 0.0.0.0
+      # 1 = HTTP sem TLS, só para desenvolvimento (backend/__main__.py).
+      BACKEND_SEM_TLS: ${BACKEND_SEM_TLS:-}
 
   # Monitoramento: assina o broker (ao vivo) e lê o banco com o papel observador
   # (histórico). Sem porta publicada: a API interna não tem autenticação, quem
