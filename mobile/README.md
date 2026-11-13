@@ -22,15 +22,16 @@ npm install
 npx expo start --ios        # simulador do iOS na mesma máquina do backend
 ```
 
-O app fala com o backend por HTTPS em `EXPO_PUBLIC_API_URL` (padrão
-`https://localhost:8444`), e o aparelho precisa confiar na CA do projeto:
+Por ora o app fala com o backend **sem TLS**: HTTP na porta 8444 da máquina que
+roda o `npx expo start` (o mesmo IP que o Expo usa para servir o app). Basta o
+backend com `BACKEND_SEM_TLS=1` e `BACKEND_ENDERECO=0.0.0.0` no `.env` da raiz e o
+celular na mesma rede; não é preciso instalar a CA nem passar endereço.
 
-- **Simulador do iOS:** `xcrun simctl keychain booted add-root-cert ../.local/mqtt/ca.crt`
-  (uma vez por simulador).
-- **Celular na mesma rede:** emita o certificado do backend com o IP da máquina
-  (`backend/configurar-backend.sh <ip>`), publique o backend nesse IP, instale e
-  marque como confiável a CA no aparelho e rode com
-  `EXPO_PUBLIC_API_URL=https://<ip>:8444 npx expo start`.
+Para voltar ao HTTPS: apague `BACKEND_SEM_TLS` do `.env`, emita o certificado
+com o IP da máquina (`backend/configurar-backend.sh <ip>`), instale e marque como
+confiável a CA (`../.local/mqtt/ca.crt`) no aparelho e rode com
+`EXPO_PUBLIC_API_URL=https://<ip>:8444 npx expo start`. No simulador do iOS:
+`xcrun simctl keychain booted add-root-cert ../.local/mqtt/ca.crt`.
 
 Contas de teste: `python3 banco/seed.py` cria `cliente`, `validador` e `admin`,
 todos com a senha `123`.

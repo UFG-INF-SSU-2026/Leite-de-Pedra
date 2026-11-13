@@ -1,8 +1,11 @@
-// Cliente do backend (HTTPS). O endereço vem de EXPO_PUBLIC_API_URL; o padrão
-// serve o simulador do iOS na mesma máquina do backend. O aparelho precisa
-// confiar na CA do projeto (.local/mqtt/ca.crt): ver mobile/README.md.
+import Constants from 'expo-constants'
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://localhost:8444'
+// Cliente do backend. Por ora sem TLS (backend com BACKEND_SEM_TLS=1): HTTP na
+// máquina que serve o app pelo Expo, que é a mesma do backend; assim o celular
+// na rede funciona sem configurar nada. EXPO_PUBLIC_API_URL troca o endereço
+// (por exemplo, https://<ip>:8444 com o certificado do projeto: mobile/README.md).
+const maquinaDoExpo = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost'
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? `http://${maquinaDoExpo}:8444`
 
 export class ErroApi extends Error {
   status: number
