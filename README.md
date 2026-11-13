@@ -333,6 +333,18 @@ duas simulações; elas usam o broker publicado em `host.wokwi.internal:8883`.
 .venv/bin/python -m unittest discover -s tests   # precisa do banco no ar
 ```
 
+Ponta a ponta, com tudo no ar (Docker, AWS e as duas simulações do Wokwi):
+
+```
+.venv/bin/python tests/e2e_completo.py
+```
+
+Cria as contas `e2e-*` com rostos gerados por IA, compra ingressos, lota a
+fila-a pela serial do produtor no Wokwi (comandos `chegada fila-a` e
+`saida fila-a`) até ela fechar e desviar para a fila-b, passa os clientes na
+catraca, confere a reação do consumidor, repete o 504 com o processador parado
+e esvazia a fila. Detalhes no próprio arquivo.
+
 **Problemas comuns**
 
 | Sintoma | Causa e solução |

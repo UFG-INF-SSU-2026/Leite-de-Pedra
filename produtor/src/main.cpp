@@ -136,6 +136,27 @@ void verificarSensor(Sensor &sensor) {
   }
 }
 
+// Simulação: "chegada fila-a" ou "saida fila-b" na serial vale como uma pessoa
+// passando pelo sensor. É por aqui que o teste e2e (tests/e2e_completo.py) lota
+// as filas pela porta RFC 2217 do Wokwi, já que o slider do HC-SR04 não aceita automação.
+void lerComandoSerial() {
+  if (!Serial.available()) return;
+  String linha = Serial.readStringUntil('\n');
+  linha.trim();
+  int espaco = linha.indexOf(' ');
+  String acao = linha.substring(0, espaco);
+  String fila = linha.substring(espaco + 1);
+  for (Sensor &sensor : sensores) {
+    bool saida = strcmp(sensor.tipo, "saida") == 0;
+    if (espaco > 0 && fila == sensor.fila && acao == (saida ? "saida" : "chegada")) {
+      Serial.printf("%s simulada na %s\n", saida ? "Saída" : "Chegada", sensor.fila);
+      publicarEvento(sensor.fila, sensor.tipo);
+      return;
+    }
+  }
+  if (linha.length()) Serial.printf("Comando desconhecido: %s\n", linha.c_str());
+}
+
 void conectarMqtt() {
   if (mqtt.connected() || millis() - ultimaTentativa < 3000) return;
   ultimaTentativa = millis();
@@ -176,6 +197,7 @@ void loop() {
     ultimaLeitura = millis();
     for (Sensor &sensor : sensores) verificarSensor(sensor);
   }
+  lerComandoSerial();
   if (millis() - ultimoHeartbeat >= INTERVALO_HEARTBEAT_MS) {
     ultimoHeartbeat = millis();
     for (const char *fila : FILAS) publicarEvento(fila, "heartbeat");
