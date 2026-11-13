@@ -41,6 +41,9 @@ export type Papel = 'cliente' | 'validador' | 'admin'
 export type Sessao = { token: string; papel: Papel }
 export type Conta = { usuarioId: string; login: string; nome: string; papel: Papel }
 export type Ingresso = { ingressoId: string; emitidoEm: string; usadoEm: string | null; filaEntrada: string | null }
+export type Semaforo = 'livre' | 'atencao' | 'bloqueada'
+export type FilaAgora = { filaId: string; semaforo: Semaforo; ocupacao: number; tempoEsperaEstimado: number | null }
+export type Filas = { filas: FilaAgora[]; recomendada: string | null }
 
 export const entrar = (login: string, senha: string) =>
   chamar<Sessao>('/sessoes', { metodo: 'POST', corpo: { login, senha } })

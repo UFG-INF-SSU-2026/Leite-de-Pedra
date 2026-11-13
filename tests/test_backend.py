@@ -127,6 +127,33 @@ class BackendTest(unittest.TestCase):
             self.assertEqual(resposta.json()["pessoa"], {"nome": "Ana", "login": "ana"})
         motor.dispose()
 
+    def test_fila_recomendada_para_quem_chega(self):
+        motor = motor_teste()
+        app_modulo = carregar_backend()
+        cadastrar(motor, Usuario(usuario_id="u-ana", login="ana", nome="Ana", face_id="f-ana",
+                                 senha_hash=gerar_hash_senha("senha-da-ana")))
+
+        def fila(fila_id, semaforo, espera, ativo=True):
+            return {"filaId": fila_id, "enlaceAtivo": ativo,
+                    "estado": {"semaforo": semaforo, "ocupacao": 3, "tempoEsperaEstimado": espera}}
+
+        with TestClient(app_modulo.app) as api:
+            self.assertEqual(api.get("/filas").status_code, 401)
+            ana = {"Authorization": "Bearer " + api.post(
+                "/sessoes", json={"login": "ana", "senha": "senha-da-ana"}).json()["token"]}
+            casos = (
+                ([fila("fila-a", "bloqueada", None), fila("fila-b", "atencao", 20)], "fila-b"),
+                ([fila("fila-a", "livre", None), fila("fila-b", "livre", 9)], "fila-b"),
+                ([fila("fila-a", "livre", 3), fila("fila-b", "livre", 0, ativo=False)], "fila-a"),
+                ([], None),
+            )
+            for filas, esperada in casos:
+                with patch.object(app_modulo.admin, "da_observabilidade", return_value={"filas": filas}):
+                    resposta = api.get("/filas", headers=ana).json()
+                self.assertEqual(resposta["recomendada"], esperada)
+                self.assertEqual(len(resposta["filas"]), sum(f["enlaceAtivo"] for f in filas))
+        motor.dispose()
+
 
 if __name__ == "__main__":
     unittest.main()

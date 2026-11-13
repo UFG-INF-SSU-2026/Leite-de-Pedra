@@ -222,6 +222,24 @@ def apagar_foto(chave):
         print(f"Falha ao apagar {chave}: {erro}")
 
 
+NIVEL_SEMAFORO = {"livre": 0, "atencao": 1, "bloqueada": 2}
+
+
+@app.get("/filas")
+def filas_agora(request: Request, _=Depends(sessao)):
+    """Filas com dados ao vivo e a recomendada para quem está chegando: o melhor
+    semáforo e, entre iguais, a menor espera. Vem do estado que o processador
+    publica, pela observabilidade."""
+    ao_vivo = admin.da_observabilidade("ao-vivo", request)
+    filas = [{"filaId": f["filaId"], "semaforo": f["estado"]["semaforo"],
+              "ocupacao": f["estado"]["ocupacao"], "tempoEsperaEstimado": f["estado"]["tempoEsperaEstimado"]}
+             for f in ao_vivo["filas"] if f["enlaceAtivo"] and f["estado"]]
+    # Espera None é indeterminada (entrada parada): fica por último entre as do mesmo semáforo.
+    melhor = min(filas, default=None, key=lambda f: (
+        NIVEL_SEMAFORO[f["semaforo"]], f["tempoEsperaEstimado"] is None, f["tempoEsperaEstimado"] or 0))
+    return {"filas": filas, "recomendada": melhor["filaId"] if melhor else None}
+
+
 def encerrar_sem_resposta(evento_id, correlacao, payload):
     """Sem resultado a tempo: grava indeterminado para o processador, ao voltar, não
     decidir a leitura (nem gastar o ingresso) depois do 504. Se ele decidiu nesse

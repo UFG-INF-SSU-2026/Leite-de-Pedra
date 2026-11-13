@@ -345,6 +345,11 @@ fila-a pela serial do produtor no Wokwi (comandos `chegada fila-a` e
 catraca, confere a reação do consumidor, repete o 504 com o processador parado
 e esvazia a fila. Detalhes no próprio arquivo.
 
+Demonstração ao vivo com o celular: `.venv/bin/python tests/demo_lotacao.py`
+lota a fila-a pelo Wokwi; a tela do ingresso no app mostra em qual fila entrar
+(`GET /filas`), a catraca do dashboard (webcam, login `e2e-validador`) lê o seu
+QR e o seu rosto, e a partir daí as filas andam e mais gente chega.
+
 **Problemas comuns**
 
 | Sintoma | Causa e solução |
@@ -469,6 +474,7 @@ IP da máquina, rode com `BACKEND_HOST=0.0.0.0` e instale a CA
 | `GET /eu` | logado | dados da conta |
 | `POST /ingressos` | logado | compra (sem pagamento) e devolve o `ingressoId`, que vai no QR code |
 | `GET /ingressos` | logado | ingressos do usuário, usados ou não |
+| `GET /filas` | logado | filas com dados ao vivo (semáforo, ocupação, espera) e `recomendada`: a de melhor semáforo e, entre iguais, menor espera. O app mostra na tela do ingresso |
 | `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s. Aceita: apaga a foto. Recusada, indeterminada ou 504: a foto fica até 1 dia. No 504 o backend grava a leitura como `indeterminado` e o processador, ao voltar, não a decide mais: o ingresso continua livre. Detalhe em [`docs/caminhos.md`](docs/caminhos.md) |
 
 Ninguém escolhe o próprio papel pelo app: o papel `backend` do banco nem tem
