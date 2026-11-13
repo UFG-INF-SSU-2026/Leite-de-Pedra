@@ -199,6 +199,12 @@ void setup() {
   while (time(nullptr) < 1700000000) delay(100);
   tls.setCACert(MQTT_CA);
   mqtt.begin(BROKER, 8883, tls);
+  // Este ESP32 só recebe: fica conectado pelo PING do keepalive. Com 10 s (o
+  // padrão), o Wokwi lento atrasa o PING e o broker derruba a conexão. A sessão
+  // persistente faz o broker guardar os resultados (QoS 1) de uma queda curta,
+  // em vez de perder a reação da catraca.
+  mqtt.setKeepAlive(60);
+  mqtt.setCleanSession(false);
   mqtt.onMessage(receber);
   conectarMqtt();
   atualizarDisplay();
