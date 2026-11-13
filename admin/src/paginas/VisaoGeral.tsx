@@ -124,7 +124,7 @@ export function VisaoGeral() {
               <dt>Espera estimada</dt><dd>{f.estado?.tempoEsperaEstimado != null ? `${f.estado.tempoEsperaEstimado} s` : '–'}</dd>
               <dt>Recomendação</dt><dd>{f.estado?.sentidoRecomendado ?? '–'}</dd>
               <dt>ESP32</dt>
-              <dd>{f.enlaceAtivo ? <Chip valor="aceito" /> : <span className="chip chip-recusado">
+              <dd>{f.enlaceAtivo ? <span className="chip chip-aceito">no ar</span> : <span className="chip chip-recusado">
                 {f.segundosSemHeartbeat == null ? 'sem heartbeat' : `caído há ${Math.round(f.segundosSemHeartbeat)} s`}</span>}</dd>
               <dt>Última tentativa</dt>
               <dd>{f.ultimaLeitura ? <>{f.ultimaLeitura.ingressoId} · {f.ultimaLeitura.reconhecimento} às {hora(f.ultimaLeitura.recebidoEm)}</> : '–'}</dd>
