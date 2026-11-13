@@ -43,7 +43,7 @@ openssl x509 -req -sha256 -days 825 \
     -out "$PASTA_BANCO/servidor.crt"
 
 for papel in admin processador backend painel observador; do
-    openssl rand -hex 24 > "$PASTA_BANCO/$papel.password"
+    openssl rand -hex 24 | tr -d '\r\n' > "$PASTA_BANCO/$papel.password"
 done
 
 rm "$PASTA_BANCO/servidor.csr" "$PASTA_BANCO/ca.srl"

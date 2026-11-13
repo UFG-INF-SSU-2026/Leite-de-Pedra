@@ -21,7 +21,7 @@ DO \$\$ BEGIN
         CREATE ROLE observador LOGIN;
     END IF;
 END \$\$;
-ALTER ROLE observador PASSWORD '$(tr -d '\n' < "$PASTA_BANCO/observador.password")';
+ALTER ROLE observador PASSWORD '$(tr -d '\r\n' < "$PASTA_BANCO/observador.password")';
 GRANT CONNECT ON DATABASE filas, filas_teste TO observador;
 SQL
 

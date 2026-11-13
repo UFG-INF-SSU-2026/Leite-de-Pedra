@@ -18,8 +18,8 @@ done
 
 # As senhas vão pela entrada padrão, não pela linha de comando.
 psql_como_postgres -d postgres <<SQL
-CREATE ROLE backend LOGIN PASSWORD '$(tr -d '\n' < "$PASTA_BANCO/backend.password")';
-CREATE ROLE painel LOGIN PASSWORD '$(tr -d '\n' < "$PASTA_BANCO/painel.password")';
+CREATE ROLE backend LOGIN PASSWORD '$(tr -d '\r\n' < "$PASTA_BANCO/backend.password")';
+CREATE ROLE painel LOGIN PASSWORD '$(tr -d '\r\n' < "$PASTA_BANCO/painel.password")';
 GRANT CONNECT ON DATABASE filas, filas_teste TO backend, painel;
 SQL
 
