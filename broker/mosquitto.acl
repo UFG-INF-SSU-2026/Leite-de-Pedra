@@ -44,3 +44,10 @@ user observador
 topic read fila/+/+
 topic read sistema/+/status
 topic read sistema/+/rejeitado
+
+# Monitor (MQTTX e depuração no host): lê tudo e não escreve nada além do
+# próprio status. Usuário próprio para não derrubar a observabilidade, que
+# entra como observador (o broker usa o usuário como client id).
+user monitor
+topic read fila/+/+
+topic read sistema/+/+

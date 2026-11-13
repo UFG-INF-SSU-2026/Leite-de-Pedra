@@ -8,6 +8,7 @@ RENOVAR_CERTIFICADOS=0
 ADICIONAR_VALIDADOR=0
 ADICIONAR_CONSUMIDOR=0
 ADICIONAR_BACKEND=0
+ADICIONAR_MONITOR=0
 if [[ "${1:-}" == "--renovar-certificados" && "$#" -eq 1 ]]; then
     RENOVAR_CERTIFICADOS=1
 elif [[ "${1:-}" == "--adicionar-validador" && "$#" -eq 1 ]]; then
@@ -16,8 +17,10 @@ elif [[ "${1:-}" == "--adicionar-consumidor" && "$#" -eq 1 ]]; then
     ADICIONAR_CONSUMIDOR=1
 elif [[ "${1:-}" == "--adicionar-backend" && "$#" -eq 1 ]]; then
     ADICIONAR_BACKEND=1
+elif [[ "${1:-}" == "--adicionar-monitor" && "$#" -eq 1 ]]; then
+    ADICIONAR_MONITOR=1
 elif [[ "$#" -ne 0 ]]; then
-    echo "Uso: $0 [--renovar-certificados|--adicionar-validador|--adicionar-consumidor|--adicionar-backend]" >&2
+    echo "Uso: $0 [--renovar-certificados|--adicionar-validador|--adicionar-consumidor|--adicionar-backend|--adicionar-monitor]" >&2
     exit 1
 fi
 
@@ -33,10 +36,12 @@ if [[ "$RENOVAR_CERTIFICADOS" -eq 1 && ! -f "$PASTA_MQTT/mosquitto.passwd" ]]; t
     exit 1
 fi
 
-if [[ "$ADICIONAR_VALIDADOR" -eq 1 || "$ADICIONAR_CONSUMIDOR" -eq 1 || "$ADICIONAR_BACKEND" -eq 1 ]]; then
+if [[ "$ADICIONAR_VALIDADOR" -eq 1 || "$ADICIONAR_CONSUMIDOR" -eq 1 || "$ADICIONAR_BACKEND" -eq 1 ||
+      "$ADICIONAR_MONITOR" -eq 1 ]]; then
     papel=validador
     if [[ "$ADICIONAR_CONSUMIDOR" -eq 1 ]]; then papel=consumidor; fi
     if [[ "$ADICIONAR_BACKEND" -eq 1 ]]; then papel=backend; fi
+    if [[ "$ADICIONAR_MONITOR" -eq 1 ]]; then papel=monitor; fi
     if [[ ! -f "$PASTA_MQTT/mosquitto.passwd" || -e "$PASTA_MQTT/$papel.password" ]]; then
         echo "Credenciais ausentes ou $papel já configurado." >&2
         exit 1

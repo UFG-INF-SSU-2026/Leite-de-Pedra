@@ -354,6 +354,7 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 | `consumidor` | lê estado e resultado; publica a reação do LED |
 | `processador` | lê movimentos e leituras; publica resultados, estados, recomendações e rejeitadas |
 | `observador` | só lê, inclusive `fila/+/leitura`; a API da observabilidade descarta `fotoRef` antes de responder ao painel |
+| `monitor` | só lê, tudo (`fila/+/+` e `sistema/+/+`); para o MQTTX e depuração no host, sem disputar o client id com a observabilidade. Criado com `broker/configurar-seguranca.sh --adicionar-monitor` |
 | `validador` | console da demo: lê resultado e estado; não publica leitura |
 | `backend` | publica as leituras do app; lê só `fila/+/resultado` |
 
