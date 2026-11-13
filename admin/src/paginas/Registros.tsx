@@ -10,6 +10,7 @@ const MOTIVOS: Record<string, string> = {
   'ingresso-cancelado': 'ingresso cancelado',
   'ingresso-ja-usado': 'ingresso já usado',
   'falha-reconhecimento': 'falha no reconhecimento',
+  'sem-resposta-processador': 'o processador não respondeu a tempo',
 }
 
 function Foto({ eventId }: { eventId: string }) {

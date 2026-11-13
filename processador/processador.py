@@ -136,9 +136,14 @@ def processar_mensagem(client, msg):
         reconhecido = payload.get("reconhecimento") == "reconhecido"
         if (not all(texto_valido(payload.get(c)) for c in campos)
                 or payload.get("reconhecimento") not in RECONHECIMENTOS
+                or not isinstance(payload.get("validoAte"), int)
                 or reconhecido != texto_valido(payload.get("usuarioReconhecido"))):
             return rejeitar(client, msg, "leitura-incompleta", recebido)
         estado_persistente.aplicar(fila, recebido)
+        # Passado o prazo, o backend já respondeu 504 e o operador decidiu na mão:
+        # decidir agora gastaria o ingresso de quem pode nem ter entrado.
+        if payload["validoAte"] < time.time() * 1000:
+            return rejeitar(client, msg, "leitura-expirada", recebido)
         if not decidir_leitura(client, recebido):
             rejeitar(client, msg, "duplicado", recebido)  # a resposta já gravada sai de novo
         return True

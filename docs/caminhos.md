@@ -74,7 +74,7 @@ Ingresso já usado, cancelado ou rosto de outra pessoa fecha na tela vermelha **
 
 ## Não esperado
 
-O backend está ligado ao broker e o processador não. A catraca recebe erro. Se o rosto conferia, o ingresso é gasto quando o processador volta.
+O backend está ligado ao broker e o processador não. A catraca recebe erro, e o ingresso continua livre para a nova tentativa.
 
 ```mermaid
 sequenceDiagram
@@ -82,21 +82,22 @@ sequenceDiagram
     participant B as Backend
     participant MQ as Broker
     participant P as Processador
+    participant DB as Banco
     V->>B: QR e foto do dono
-    B->>MQ: leitura em QoS 1
+    B->>MQ: leitura em QoS 1, com validoAte
     Note over P: processador desligado, sessão persistente
+    B->>DB: aos 10 s, grava indeterminado (sem-resposta-processador)
     B-->>V: HTTP 504 na tela de captura
     P->>MQ: ao voltar, recebe a leitura
-    P->>P: marca o ingresso usado
-    MQ-->>B: resultado aceito
-    Note over B: a correlation_id já saiu do mapa
+    P->>P: passou do validoAte: rejeita como leitura-expirada
     V->>B: nova tentativa
-    B-->>V: Não liberar, ingresso já usado
+    B-->>V: Liberar entrada
 ```
 
 - O 503 só sai se o próprio backend estiver desconectado do broker. Nesse caso nada é publicado e o ingresso permanece válido.
 - Com o broker no ar, a leitura entra na sessão persistente do processador (fila de até 10.000, em disco).
-- Aos 10 s o backend responde 504, «O processador não respondeu. Decida manualmente.», e apaga a `correlation_id` da memória.
+- Aos 10 s o backend grava a leitura como `indeterminado`, motivo `sem-resposta-processador`, e responde 504, «O processador não respondeu. Decida manualmente.».
 - O app mostra esse texto como erro na tela de captura. Não abre a tela âmbar de decisão.
-- Na volta, o processador decide. Se o rosto era o do dono, marca o ingresso. O resultado não acha quem esperava.
-- A tentativa seguinte responde `ingresso-ja-usado`: tela vermelha **Não liberar**.
+- Na volta, o processador descarta a leitura (`leitura-expirada` em `sistema/processador/rejeitado`) e não toca no ingresso. A nova tentativa é uma leitura nova e é decidida normalmente.
+- Backend e processador gravam a decisão sob a mesma trava do banco (`travar_leitura`, por `evento_id`). Se o processador decidir no limite dos 10 s, vale quem gravar primeiro: o backend devolve a decisão do processador em vez do 504, ou o processador encontra o `indeterminado` e só o republica.
+- O `validoAte` cobre o backend cair durante a espera, sem gravar o `indeterminado`.

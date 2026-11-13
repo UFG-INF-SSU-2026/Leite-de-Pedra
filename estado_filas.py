@@ -7,6 +7,22 @@ from modelos import (Estado, Fila, Ingresso, Movimento, Saida, Usuario, criar_mo
                      de_milissegundos, em_milissegundos, fabrica_de_sessoes)
 
 
+def travar_leitura(s, evento_id):
+    """Trava a decisão da leitura até o fim da transação e devolve a já gravada, se houver.
+
+    Decide a leitura o processador ou, quando ele não responde a tempo, o
+    backend (indeterminado, sem gastar o ingresso). Vale quem gravar primeiro; o
+    outro lê essa decisão. Trava consultiva porque a hypertable movimentos só
+    aceita índice único que inclua o momento.
+    """
+    s.execute(select(func.pg_advisory_xact_lock(func.hashtext(evento_id))))
+    linha = s.execute(
+        select(Movimento.resultado, Movimento.motivo, Movimento.momento)
+        .where(Movimento.evento_id == evento_id, Movimento.tipo == "resultado")
+    ).first()
+    return (linha.resultado, linha.motivo, em_milissegundos(linha.momento)) if linha else None
+
+
 class EstadoFilas:
     """Saldo das filas, movimentos e decisões das leituras, persistidos pelo processador."""
 
@@ -54,14 +70,6 @@ class EstadoFilas:
                                                  Usuario.papel == "validador")
             ) is not None
 
-    @staticmethod
-    def _resultado_gravado(s, evento_id):
-        linha = s.execute(
-            select(Movimento.resultado, Movimento.motivo, Movimento.momento)
-            .where(Movimento.evento_id == evento_id, Movimento.tipo == "resultado")
-        ).first()
-        return (linha.resultado, linha.motivo, em_milissegundos(linha.momento)) if linha else None
-
     def registrar_resultado(self, evento_id, fila_id, momento_ms, ingresso_id, resultado,
                             motivo=None, usuario_id=None, validador_id=None, correlacao_id=None,
                             mensagem=None):
@@ -77,7 +85,7 @@ class EstadoFilas:
         mensagem(resultado, motivo, eventTimeMs) -> (event_id, tópico, conteúdo).
         """
         with self.sessao.begin() as s:
-            anterior = self._resultado_gravado(s, evento_id)
+            anterior = travar_leitura(s, evento_id)
             if anterior:
                 self._na_saida(s, mensagem, *anterior)
                 return (*anterior, False)

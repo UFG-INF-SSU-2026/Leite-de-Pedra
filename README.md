@@ -137,7 +137,7 @@ confirmado de novo, sem repetir a reação. O consumidor não decide nada.
 
 **`sistema/processador/rejeitado`** — cada mensagem que o processador
 descartou: `{"topico", "motivo", "eventId"?, "conteudo"?}`, com `motivo` igual a
-`fora-do-contrato`, `tipo-desconhecido`, `leitura-incompleta` ou `duplicado`.
+`fora-do-contrato`, `tipo-desconhecido`, `leitura-incompleta`, `leitura-expirada` ou `duplicado`.
 O `conteudo` (até 300 bytes) só vai quando a mensagem não é uma leitura nem
 segue o contrato. O dashboard mostra a contagem por motivo.
 
@@ -149,10 +149,11 @@ assinante recebe biometria. Pela ACL, só o backend publica e só o processador
 lê este tópico. O backend gera o `correlation_id` da operação e já manda o
 resultado do Rekognition: `reconhecimento` é `reconhecido` (com
 `usuarioReconhecido`), `nao-reconhecido` ou `falha` (sem rosto na foto ou sem
-resposta da AWS).
+resposta da AWS). `validoAte` (ms) é o fim da espera do backend:
+depois dele o processador descarta a leitura como `leitura-expirada`.
 
 ```json
-{"filaId": "fila-a", "fotoRef": "leituras/8e7d2184e4f0410895e2af6da4e5e2a1.jpg", "ingressoId": "3F9A1C07B2E4", "validadorId": "5b0c…", "reconhecimento": "reconhecido", "usuarioReconhecido": "a41f…"}
+{"filaId": "fila-a", "fotoRef": "leituras/8e7d2184e4f0410895e2af6da4e5e2a1.jpg", "ingressoId": "3F9A1C07B2E4", "validadorId": "5b0c…", "reconhecimento": "reconhecido", "usuarioReconhecido": "a41f…", "validoAte": 1794590000000}
 ```
 
 **`fila/{id}/resultado`** — a decisão do processador para aquela leitura, com
@@ -169,7 +170,7 @@ confirmar, então pode chegar mais de uma vez, sempre com o mesmo `event_id`.
 |---|---|
 | `aceito` | o rosto é do dono do ingresso, que ainda não tinha sido usado; o ingresso é marcado como usado |
 | `recusado` | `motivo`: `validador-nao-autorizado`, `rosto-nao-confere`, `ingresso-inexistente`, `ingresso-cancelado` ou `ingresso-ja-usado` |
-| `indeterminado` | `motivo`: `falha-reconhecimento`; o operador decide manualmente |
+| `indeterminado` | `motivo`: `falha-reconhecimento`; o operador decide manualmente. Ou `sem-resposta-processador`, gravado pelo backend no 504 |
 
 O backend chama o `SearchFacesByImage` com a foto (semelhança mínima de 95%);
 o rosto encontrado traz o `usuario_id` no `ExternalImageId`. O processador
@@ -455,7 +456,7 @@ IP da máquina, rode com `BACKEND_HOST=0.0.0.0` e instale a CA
 | `GET /eu` | logado | dados da conta |
 | `POST /ingressos` | logado | compra (sem pagamento) e devolve o `ingressoId`, que vai no QR code |
 | `GET /ingressos` | logado | ingressos do usuário, usados ou não |
-| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s. Aceita: apaga a foto. Recusada, indeterminada ou 504: a foto fica até 1 dia. No 504 a leitura não é cancelada; quando o processador voltar, ele ainda decide e pode marcar o ingresso. Detalhe em [`docs/caminhos.md`](docs/caminhos.md) |
+| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s. Aceita: apaga a foto. Recusada, indeterminada ou 504: a foto fica até 1 dia. No 504 o backend grava a leitura como `indeterminado` e o processador, ao voltar, não a decide mais: o ingresso continua livre. Detalhe em [`docs/caminhos.md`](docs/caminhos.md) |
 
 Ninguém escolhe o próprio papel pelo app: o papel `backend` do banco nem tem
 permissão para escrever a coluna `papel`. Validadores e admins são definidos

@@ -88,7 +88,7 @@ cada componente fica em `sistema/{usuario}/status`.
 | `fila/{id}/recomendacao` | processador | observabilidade | mudança de recomendação, com o motivo |
 | `fila/{id}/reacao` | consumidor | observabilidade | a reação que o ESP32 executou para um `resultado` (`liberar`, `decidir-manual` ou `barrar`), com o `correlation_id` da leitura |
 | `sistema/{usuario}/status` | cada componente (o próprio) | observabilidade | `online` ao conectar; `offline` pelo Last Will ou ao sair (retido) |
-| `sistema/processador/rejeitado` | processador | observabilidade | mensagem descartada e o motivo: `fora-do-contrato`, `tipo-desconhecido`, `leitura-incompleta` ou `duplicado` |
+| `sistema/processador/rejeitado` | processador | observabilidade | mensagem descartada e o motivo: `fora-do-contrato`, `tipo-desconhecido`, `leitura-incompleta`, `leitura-expirada` ou `duplicado` |
 
 ### Contrato das mensagens
 
@@ -229,8 +229,9 @@ Decisões deste fluxo:
 - **O `correlation_id` liga a resposta à pergunta.** O `resultado` repete o
   `correlation_id` da `leitura`, então o backend entrega cada resposta à
   catraca certa mesmo com vários validadores na mesma fila. A espera HTTP é de
-  10 s. Se estourar, a rota responde 504 e esquece o `correlation_id`. A leitura
-  já publicada continua na sessão do processador e ainda pode marcar o ingresso.
+  10 s. Se estourar, a rota grava a leitura como `indeterminado`
+  (`sem-resposta-processador`) e responde 504. O processador, ao voltar, encontra
+  essa decisão ou o `validoAte` vencido e não marca o ingresso.
 - **Sem AWS no caminho do MQTT.** O Rekognition leva perto de 1 s e roda na
   requisição HTTP do backend; o processador decide a leitura só com o banco,
   na própria thread do MQTT, sem segurar contagens e saídas.

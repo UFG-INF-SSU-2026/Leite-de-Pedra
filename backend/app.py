@@ -14,6 +14,7 @@ import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -22,7 +23,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 
-from modelos import Ingresso, Usuario
+from estado_filas import travar_leitura
+from modelos import Ingresso, Movimento, Usuario
 from mqtt_config import conectar, desconectar, evento
 from senhas import autenticar_hash, gerar_hash_senha
 
@@ -220,6 +222,21 @@ def apagar_foto(chave):
         print(f"Falha ao apagar {chave}: {erro}")
 
 
+def encerrar_sem_resposta(evento_id, correlacao, payload):
+    """Sem resultado a tempo: grava indeterminado para o processador, ao voltar, não
+    decidir a leitura (nem gastar o ingresso) depois do 504. Se ele decidiu nesse
+    meio-tempo, devolve a decisão dele."""
+    with sessao_backend.begin() as s:
+        gravada = travar_leitura(s, evento_id)
+        if gravada:
+            return {"resultado": gravada[0], "motivo": gravada[1]}
+        s.add(Movimento(evento_id=evento_id, fila_id=payload["filaId"], tipo="resultado",
+                        momento=datetime.now(timezone.utc), resultado="indeterminado",
+                        motivo="sem-resposta-processador", ingresso_id=payload["ingressoId"],
+                        validador_id=payload["validadorId"], correlacao_id=correlacao, origem="backend"))
+    return None
+
+
 @app.post("/leituras")
 def ler_na_catraca(dados: Leitura, validador=Depends(sessao_de_validador)):
     foto = decodificar_foto(dados.foto)
@@ -238,13 +255,18 @@ def ler_na_catraca(dados: Leitura, validador=Depends(sessao_de_validador)):
         # O processador confere de novo, no banco, se validadorId é mesmo validador, e
         # se o ingresso é de usuarioReconhecido. A ACL só deixa o backend publicar leituras.
         payload = {"filaId": dados.filaId, "fotoRef": chave, "ingressoId": dados.ingressoId,
-                   "validadorId": validador["sub"], "reconhecimento": reconhecimento}
+                   "validadorId": validador["sub"], "reconhecimento": reconhecimento,
+                   # Depois disso o processador descarta a leitura, mesmo que o backend
+                   # tenha caído sem gravar o indeterminado (encerrar_sem_resposta).
+                   "validoAte": int((time.time() + ESPERA_RESULTADO_SEGUNDOS) * 1000)}
         if usuario:
             payload["usuarioReconhecido"] = usuario
         leitura = evento("leitura", "backend", payload, correlation_id=correlacao, event_id=evento_id)
         cliente_mqtt.publish(f"fila/{dados.filaId}/leitura", json.dumps(leitura), qos=1)
         if not espera[0].wait(ESPERA_RESULTADO_SEGUNDOS):
-            raise HTTPException(504, "O processador não respondeu. Decida manualmente.")
+            espera[1] = encerrar_sem_resposta(evento_id, correlacao, payload)
+            if espera[1] is None:
+                raise HTTPException(504, "O processador não respondeu. Decida manualmente.")
     finally:
         with trava_respostas:
             respostas.pop(correlacao, None)

@@ -4,13 +4,14 @@ import json
 import runpy
 import time
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import estado_filas
 import mqtt_config
 from apoio_banco import cadastrar, motor_teste
-from modelos import Ingresso, Usuario
+from modelos import Ingresso, Movimento, Usuario
 
 
 class ClienteFalso:
@@ -38,6 +39,7 @@ class HeartbeatTest(unittest.TestCase):
 
         cliente = ClienteFalso()
         horario_antigo = int((time.time() - 120) * 1000)
+        valido_ate = int((time.time() + 60) * 1000)
 
         def entregar(tipo, identificador):
             movimento = mqtt_config.evento(tipo, "produtor", {"filaId": "fila-a"},
@@ -86,7 +88,7 @@ class HeartbeatTest(unittest.TestCase):
         )
         for numero, (reconhecimento, usuario, ingresso, validador, esperado, motivo) in enumerate(casos):
             dados = {"filaId": "fila-a", "fotoRef": f"leituras/{numero}.jpg", "ingressoId": ingresso,
-                     "validadorId": validador, "reconhecimento": reconhecimento}
+                     "validadorId": validador, "reconhecimento": reconhecimento, "validoAte": valido_ate}
             if usuario:
                 dados["usuarioReconhecido"] = usuario
             leitura = mqtt_config.evento("leitura", "backend", dados, correlation_id=f"operacao-{numero}",
@@ -125,6 +127,31 @@ class HeartbeatTest(unittest.TestCase):
             self.assertEqual((usado.leitura_id, usado.fila_entrada, usado.validador_id),
                              ("leitura-0", "fila-a", "validador-1"))
             self.assertIsNone(sessao.get(Ingresso, "ING-2").usado_em)
+
+        # Caso do 504: o backend desistiu de esperar. Se ele gravou o indeterminado primeiro,
+        # o processador devolve essa decisão; passado o validoAte, nem decide. Ingresso livre.
+        cadastrar(motor, Ingresso(ingresso_id="ING-3", usuario_id="usuario-1"))
+        with estado.sessao.begin() as s:
+            self.assertIsNone(estado_filas.travar_leitura(s, "atrasada-0"))
+            s.add(Movimento(evento_id="atrasada-0", fila_id="fila-a", tipo="resultado",
+                            momento=datetime.now(timezone.utc), resultado="indeterminado",
+                            motivo="sem-resposta-processador", origem="backend"))
+        for numero, prazo in enumerate((valido_ate, int(time.time() * 1000) - 1)):
+            atrasada = mqtt_config.evento("leitura", "backend", {
+                "filaId": "fila-a", "fotoRef": "x", "ingressoId": "ING-3", "validadorId": "validador-1",
+                "reconhecimento": "reconhecido", "usuarioReconhecido": "usuario-1", "validoAte": prazo,
+            }, event_id=f"atrasada-{numero}")
+            publicadas = len(cliente.publicacoes)
+            modulo["on_message"](cliente, None, SimpleNamespace(
+                topic="fila/fila-a/leitura", payload=json.dumps(atrasada).encode(),
+                mid=f"atrasada-{numero}", qos=1))
+            self.assertIn(f"atrasada-{numero}", cliente.confirmadas)
+            self.assertEqual([(p[1]["payload"].get("resultado"), p[1]["payload"]["motivo"])
+                              for p in cliente.publicacoes[publicadas:]],
+                             [("indeterminado", "sem-resposta-processador"), (None, "duplicado")] if numero == 0
+                             else [(None, "leitura-expirada")])
+        with estado.sessao() as sessao:
+            self.assertIsNone(sessao.get(Ingresso, "ING-3").usado_em)
 
         # Leitura incompleta (sem ingresso, ou reconhecida sem usuário): rejeitada, sem resposta
         # e sem o conteúdo, que tem a referência da foto.

@@ -40,7 +40,8 @@ CREATE TABLE auditoria (
 );
 
 -- Por que uma leitura foi recusada: validador-nao-autorizado, rosto-nao-confere,
--- ingresso-inexistente, ingresso-cancelado, ingresso-ja-usado ou falha-reconhecimento.
+-- ingresso-inexistente, ingresso-cancelado, ingresso-ja-usado, falha-reconhecimento
+-- ou sem-resposta-processador (gravado pelo backend no 504).
 ALTER TABLE movimentos ADD COLUMN IF NOT EXISTS motivo TEXT;
 -- Na decisão de cada leitura: o ingresso apresentado e quem leu (auditoria do admin).
 ALTER TABLE movimentos ADD COLUMN IF NOT EXISTS ingresso_id TEXT;
@@ -55,6 +56,10 @@ ALTER TABLE movimentos ADD COLUMN IF NOT EXISTS origem TEXT;
 GRANT SELECT ON usuarios, ingressos TO backend;
 GRANT INSERT (usuario_id, login, senha_hash, nome, face_id) ON usuarios TO backend;
 GRANT INSERT (ingresso_id, usuario_id) ON ingressos TO backend;
+-- Leitura sem resposta do processador em 10 s: o backend grava o indeterminado
+-- (sem-resposta-processador), ou lê a decisão que o processador gravou antes.
+-- Num banco existente, rode só esta linha.
+GRANT SELECT, INSERT ON movimentos TO backend;
 
 -- painel (rotas de gestão do dashboard de admin): usuários, ingressos e
 -- auditoria, menos as senhas, e só escreve o que o admin gerencia: o papel, o

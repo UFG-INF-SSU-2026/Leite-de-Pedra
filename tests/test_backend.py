@@ -1,6 +1,7 @@
 """Backend do app: cadastro com rosto, login, compra e leitura na catraca por validador."""
 
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -8,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from apoio_backend import carregar_backend, foto, rekognition, s3
 from apoio_banco import cadastrar, motor_teste
-from modelos import Usuario
+from estado_filas import EstadoFilas
+from modelos import Ingresso, Usuario
 from mqtt_config import evento, ler_evento
 from senhas import gerar_hash_senha
 
@@ -93,6 +95,36 @@ class BackendTest(unittest.TestCase):
             # Recusadas ficam no bucket para o admin revisar.
             self.assertEqual((len(s3.chaves), s3.apagadas), (3, [s3.chaves[0]]))
             self.assertEqual(api.get("/eu", headers=ana).json()["papel"], "cliente")
+
+            # Processador fora do ar: o backend responde 504 e grava indeterminado. Quando o
+            # processador volta, encontra essa decisão e não gasta o ingresso.
+            estado = EstadoFilas(motor)
+            atrasadas = []
+
+            def decidir(leitura_publicada):
+                dados = leitura_publicada["payload"]
+                return estado.registrar_resultado(
+                    leitura_publicada["event_id"], dados["filaId"], int(time.time() * 1000), dados["ingressoId"],
+                    "aceito", None, dados["usuarioReconhecido"], dados["validadorId"])[:2]
+
+            with patch.object(app_modulo.cliente_mqtt, "is_connected", return_value=True), \
+                 patch.object(app_modulo, "ESPERA_RESULTADO_SEGUNDOS", 0.05), \
+                 patch.object(app_modulo.cliente_mqtt, "publish",
+                              side_effect=lambda _t, conteudo, qos: atrasadas.append(json.loads(conteudo))):
+                self.assertEqual(api.post("/leituras", json=leitura, headers=vera).status_code, 504)
+            self.assertEqual(decidir(atrasadas[0]), ("indeterminado", "sem-resposta-processador"))
+            with estado.sessao() as s:
+                self.assertIsNone(s.get(Ingresso, ingresso).usado_em)
+
+            # Nova tentativa; o processador decide no limite da espera, sem a resposta chegar
+            # a tempo: o backend encontra a decisão gravada e a devolve em vez do 504.
+            with patch.object(app_modulo.cliente_mqtt, "is_connected", return_value=True), \
+                 patch.object(app_modulo, "ESPERA_RESULTADO_SEGUNDOS", 0.05), \
+                 patch.object(app_modulo.cliente_mqtt, "publish",
+                              side_effect=lambda _t, conteudo, qos: decidir(json.loads(conteudo))):
+                resposta = api.post("/leituras", json=leitura, headers=vera)
+            self.assertEqual((resposta.status_code, resposta.json()["resultado"]), (200, "aceito"))
+            self.assertEqual(resposta.json()["pessoa"], {"nome": "Ana", "login": "ana"})
         motor.dispose()
 
 
