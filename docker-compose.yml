@@ -4,8 +4,8 @@
 #   docker compose up -d --build      # sobe tudo
 #   docker compose logs -f processador
 #
-# Fora do Docker: os ESP32 (Wokwi, no VS Code, pelo broker em 127.0.0.1:8883),
-# o app mobile (Expo) e o console validador/ (lê logs e seriais do host).
+# Fora do Docker: os ESP32 (Wokwi, no VS Code, pelo broker em 127.0.0.1:8883)
+# e o app mobile (Expo).
 # Todas as portas ficam só em 127.0.0.1.
 
 name: leite-de-pedra

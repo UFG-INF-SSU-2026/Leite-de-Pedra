@@ -14,7 +14,6 @@ decide se o ingresso vale.
 | Pasta | O que é |
 |---|---|
 | [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 das filas com um sensor na entrada e outro na saída de cada fila (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware. |
-| [`validador/`](validador/) | Console da demonstração (`servidor.py` + `index.html`): mostra o estado das filas e o último resultado. Não publica leitura. A catraca é o app em `mobile/`. |
 | [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
 | [`banco/`](banco/) | TimescaleDB em Docker: esquema (hypertables e agregados por minuto), papéis do banco, TLS e scripts para gerar credenciais e subir o banco. |
 | [`processador/`](processador/) | Serviço que consome os movimentos dos sensores e as leituras faciais, calcula ocupação, vazão e espera, aplica as regras do ingresso e publica o estado de cada fila e o resultado de cada leitura. |
@@ -79,7 +78,6 @@ não por fios entre as placas.
 | `produtor/src/consumidor.cpp` (`consumidor`) | `fila/{id}/reacao` | `fila/+/estado`, `fila/+/resultado` |
 | `backend/` (`backend`) | `fila/{id}/leitura` | `fila/+/resultado` (a resposta da catraca) |
 | `observabilidade/` (`observador`) | — | tudo em `fila/+/+`, `sistema/+/status` e `sistema/+/rejeitado` |
-| `validador/servidor.py` (`validador`, console da demo) | — | `fila/+/resultado`, `fila/+/estado` |
 | `processador/processador.py` | `fila/{id}/resultado`, `fila/{id}/estado`, `fila/{id}/recomendacao` | `fila/+/contagem`, `fila/+/saida`, `fila/+/heartbeat`, `fila/+/leitura` |
 
 Na demonstração Wokwi, `{id}` é `fila-a` ou `fila-b`.
@@ -372,7 +370,7 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 | `processador` | lê movimentos e leituras; publica resultados, estados, recomendações e rejeitadas |
 | `observador` | só lê, inclusive `fila/+/leitura`; a API da observabilidade descarta `fotoRef` antes de responder ao painel |
 | `monitor` | só lê, tudo (`fila/+/+` e `sistema/+/+`); para o MQTTX e depuração no host, sem disputar o client id com a observabilidade. Criado com `broker/configurar-seguranca.sh --adicionar-monitor` |
-| `validador` | console da demo: lê resultado e estado; não publica leitura |
+| `validador` | só lê resultado e estado; sem cliente no momento (era o console da demo, removido) |
 | `backend` | publica as leituras do app; lê só `fila/+/resultado` |
 
 O listener sem criptografia foi removido. Toda comunicação usa MQTT sobre TLS na
@@ -543,13 +541,11 @@ no mesmo volume `banco_dados` de antes, e a persistência do broker em
 `.local/mosquitto`.
 
 Ficam fora do Docker: os ESP32 no Wokwi (alcançam o broker em
-`host.wokwi.internal:8883`, a porta publicada), o app em `mobile/` (Expo) e o
-console `validador/`, que lê os logs e as seriais do host. Para usar o
-console com o Docker, rode só ele no host (`python3 validador/servidor.py`).
+`host.wokwi.internal:8883`, a porta publicada) e o app em `mobile/` (Expo).
 
 ### Execução sem Docker
 
-Para a demonstração integrada, suba o banco uma vez e use quatro terminais na
+Para a demonstração integrada, suba o banco uma vez e use três terminais na
 raiz do projeto:
 
 ```
@@ -557,16 +553,13 @@ raiz do projeto:
 mkdir -p .local/logs
 ./broker/iniciar-broker.sh 2>&1 | tee .local/logs/broker.log                    # terminal 1
 python3 -u processador/processador.py 2>&1 | tee .local/logs/processador.log        # terminal 2
-python3 -u validador/servidor.py 2>&1 | tee .local/logs/validador.log            # terminal 3
-python3 -u -m backend 2>&1 | tee .local/logs/backend.log                         # terminal 4
+python3 -u -m backend 2>&1 | tee .local/logs/backend.log                         # terminal 3
 ```
 
 O dashboard fica em `https://localhost:8444/painel/` (ver [Dashboard de admin](#dashboard-de-admin)): o que é ao vivo vem da observabilidade (`python3 -m observabilidade` fora do Docker, em `127.0.0.1:8090`) e é consultado a cada 2 s; o resto vem do TimescaleDB.
 
-Abra `http://localhost:8000` no navegador. Abaixo das filas, a página mostra
-as últimas linhas de cada terminal (lidas de `.local/logs/`) e a serial de
-cada ESP32: o Wokwi expõe a serial dos sensores na porta 4000 e a do
-consumidor na 4001 (`rfc2217ServerPort` nos `wokwi.toml`). Compile **ambos** os firmwares na
+O Wokwi expõe a serial dos sensores na porta 4000 e a do consumidor na 4001
+(`rfc2217ServerPort` nos `wokwi.toml`); o teste e2e aciona os sensores pela 4000. Compile **ambos** os firmwares na
 pasta `produtor/` com `pio run` (ou PlatformIO: Build). Em uma janela do VS Code,
 selecione `produtor/wokwi.toml` em `F1 → Wokwi: Select Config File` e inicie o
 simulador: essa janela contém apenas os sensores. Em outra janela/instância do
@@ -644,4 +637,4 @@ Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas co
 | [`entregas/Marco2/atividade-02.md`](entregas/Marco2/atividade-02.md) | Atividade em Grupo 02: eventos do sistema e distribuição de responsabilidades. |
 | [`entregas/Marco1/`](entregas/Marco1/) | Protótipos individuais no Wokwi, um por integrante, com relatório e evidências dos testes. |
 | [`entregas/Marco2/`](entregas/Marco2/) | Primeira integração produtor → MQTT → processador, com README e roteiro de demonstração próprios. |
-| [`entregas/Marco3/`](entregas/Marco3/) | Apresentação de segurança (TLS, autenticação e ACL), servida em `http://localhost:8000/apresentacao` pelo validador. O código do Marco 3 é o próprio repositório. |
+| [`entregas/Marco3/`](entregas/Marco3/) | Apresentação de segurança (TLS, autenticação e ACL), aberta direto no navegador (os terminais ao vivo dependiam do console da demo, removido). O código do Marco 3 é o próprio repositório. |

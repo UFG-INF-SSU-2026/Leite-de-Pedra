@@ -30,7 +30,6 @@ por senha e ACL por componente.
 |---|---|---|
 | **Produtor** | `produtor/src/main.cpp` (ESP32 no Wokwi) | Sensores HC-SR04 na entrada e na saída de cada fila. Publica cada movimento e um heartbeat. |
 | **App do validador** | `mobile/` | Catraca: lê o QR e o rosto e fala só com o backend, por HTTPS. Não tem usuário MQTT. |
-| **Console da demo** | `validador/` | Página local. Mostra estado e último resultado. Não publica leitura. |
 | **Broker** | `broker/` (Mosquitto) | Entrega as mensagens entre os componentes, com TLS e ACL. |
 | **Processador** | `processador/processador.py` | Único que decide: calcula ocupação, vazão e espera e avalia cada leitura facial. |
 | **Consumidor** | `produtor/src/consumidor.cpp` (ESP32 no Wokwi) | LCD e LEDs que indicam ao público qual fila procurar. |
@@ -248,7 +247,7 @@ Cada próximo passo da tabela abaixo só é concluído quando cumpre as
 | Reconhecimento | o backend chama `SearchFacesByImage` (95%) e publica o usuário reconhecido; o processador confere o papel do validador no banco e se o rosto é do dono do ingresso, e marca o ingresso na mesma transação do resultado | — |
 | Foto | o backend guarda a foto em `leituras/` no S3 e a apaga assim que a leitura é **aceita**. Recusadas e indeterminadas ficam para o admin revisar até a regra do bucket apagá-las (1 dia), assim como a de uma leitura cujo resultado não chegou em 10 s | — |
 | Usuários e ingressos | `backend/` (FastAPI): cadastro com login, senha e rosto, compra de ingressos, sessão JWT; papéis `validador` e `admin` definidos por um admin no dashboard (o primeiro por `banco/definir-papel.sh`) | pagamento e eventos (fora do escopo atual: a compra não cobra e há um evento só) |
-| App mobile | `mobile/` (Expo): cliente cria conta com a foto do rosto, entra, compra ingressos e mostra o QR; validador lê o QR e captura o rosto na tela da catraca. Fala só com o backend, por HTTPS, sem credencial MQTT ou AWS no aparelho. A página `validador/` virou console da demo | — |
+| App mobile | `mobile/` (Expo): cliente cria conta com a foto do rosto, entra, compra ingressos e mostra o QR; validador lê o QR e captura o rosto na tela da catraca. Fala só com o backend, por HTTPS, sem credencial MQTT ou AWS no aparelho. | — |
 | Dashboard | SPA React em `admin/`, servida pelo backend em `/painel/`; API `/admin/*` com o papel admin conferido a cada requisição: o operacional repassado da observabilidade (papel `observador`), a gestão com o papel `painel`. O histórico por minuto tem gráficos de espera média e de entradas por fila | — |
 
 ## Segurança e permissões

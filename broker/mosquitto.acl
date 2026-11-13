@@ -26,7 +26,7 @@ topic write fila/+/estado
 topic write fila/+/resultado
 topic write sistema/processador/rejeitado
 
-# Validador (página local da demo): só acompanha o estado e os resultados.
+# Validador: só acompanha o estado e os resultados (sem cliente no momento; era o console da demo).
 # As leituras agora vêm do app, pelo backend.
 user validador
 topic read fila/+/resultado
