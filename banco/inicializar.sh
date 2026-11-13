@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-senha() { tr -d '\n' < "/run/segredos/$1.password"; }
+senha() { tr -d '\r\n' < "/run/segredos/$1.password"; }
 
 psql -v ON_ERROR_STOP=1 -U postgres -d postgres \
     -v senha_processador="$(senha processador)" \

@@ -1,0 +1,7 @@
+# Scripts e configs montados no Linux (Docker/Alpine) quebram com CRLF.
+*.sh text eol=lf
+*.sql text eol=lf
+*.acl text eol=lf
+banco/pg_hba.conf text eol=lf
+broker/mosquitto.conf text eol=lf
+entregas/Marco2/mosquitto.conf text eol=lf

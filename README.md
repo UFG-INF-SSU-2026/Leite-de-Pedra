@@ -14,18 +14,18 @@ decide se o ingresso vale.
 | Pasta | O que é |
 |---|---|
 | [`produtor/`](produtor/) | Firmware dos ESP32 simulados no Wokwi: o ESP32 das filas com um sensor na entrada e outro na saída de cada fila (`src/main.cpp`), o consumidor com LCD e LEDs (`src/consumidor.cpp`, circuito em `consumidor/`) e o intruso sem credencial (`intruso/`). Também traz `preparar-wokwi.py`, que grava as senhas no firmware. |
-| [`validador/`](validador/) | Leitura facial na catraca: envia a leitura ao processador e mostra se a pessoa foi aceita. Hoje é uma página local (`index.html`) servida por `servidor.py` que simula a câmera; será substituída pela aplicação mobile. |
+| [`validador/`](validador/) | Console da demonstração (`servidor.py` + `index.html`): mostra o estado das filas e o último resultado. Não publica leitura. A catraca é o app em `mobile/`. |
 | [`broker/`](broker/) | Broker MQTT Mosquitto: configuração TLS, ACL por papel e scripts para gerar credenciais, iniciar o broker e testar a autorização. |
 | [`banco/`](banco/) | TimescaleDB em Docker: esquema (hypertables e agregados por minuto), papéis do banco, TLS e scripts para gerar credenciais e subir o banco. |
 | [`processador/`](processador/) | Serviço que consome os movimentos dos sensores e as leituras faciais, calcula ocupação, vazão e espera, aplica as regras do ingresso e publica o estado de cada fila e o resultado de cada leitura. |
 | [`admin/`](admin/) | Dashboard web de administração (React + Vite + TypeScript). Mostra todos os dados (filas ao vivo, histórico, usuários, ingressos, leituras com foto, movimentos, estados e auditoria) e permite trocar papéis e cancelar ingressos. O build é servido pelo backend em `/painel/`. |
-| [`mobile/`](mobile/) | App do usuário (Expo, Expo Router, TypeScript): criar conta com a foto do rosto, entrar, comprar ingressos e mostrar o QR do ingresso na catraca. Como rodar em [`mobile/README.md`](mobile/README.md). |
+| [`mobile/`](mobile/) | App (Expo, Expo Router, TypeScript). Cliente: cria conta com a foto, entra, compra ingressos e mostra o QR. Validador: lê o QR e o rosto na catraca. Como rodar em [`mobile/README.md`](mobile/README.md). |
 | [`observabilidade/`](observabilidade/) | Monitoramento: assina tudo no broker e lê o histórico do banco, os dois como `observador` e só leitura; não grava nada. Serve uma API interna (ao vivo e histórico) que o backend repassa ao dashboard, conferindo o admin. |
 | [`backend/`](backend/) | API HTTPS do app (FastAPI): cadastro com login, senha e rosto, compra de ingressos e leitura na catraca pelos validadores. Reconhece o rosto no Rekognition, publica as leituras no MQTT e devolve o resultado do processador. |
 | [`tests/`](tests/) | Testes automatizados (`python3 -m unittest discover -s tests`). |
 | [`entregas/`](entregas/) | Entregas da disciplina; ver [Entregas](#entregas). |
 
-O fluxo completo, com diagramas, está em [`ARQUITETURA.md`](docs/ARQUITETURA.md).
+O fluxo completo, com diagramas, está em [`ARQUITETURA.md`](docs/ARQUITETURA.md). Os quatro caminhos de uso estão em [`caminhos.md`](docs/caminhos.md).
 
 Na raiz ficam os módulos Python compartilhados: `mqtt_config.py` (conexão
 TLS autenticada usada por todos os clientes), `modelos.py` (modelos SQLAlchemy
@@ -36,31 +36,33 @@ histórico e decisão das leituras, sobre o ORM) e `senhas.py` (hash scrypt).
 
 ```mermaid
 flowchart LR
-    P["<b>Produtor</b><br/>ESP32 com sensores de<br/>entrada e saída por fila"]
-    S["<b>Consumidor</b><br/>ESP32 com LCD e LEDs"]
-    V["<b>App do validador</b><br/>QR do ingresso + rosto"]
-    K["<b>Backend</b><br/>API HTTPS do app"]
-    B(("Broker MQTT/TLS<br/>mosquitto :8883"))
-    C["<b>Processador</b><br/>ocupação, vazão, espera<br/>regras do ingresso"]
-    R[("AWS Rekognition")]
-    O["<b>Dashboard de admin</b><br/>SPA React em /painel"]
+    P["Produtor<br/>ESP32 sensores"]
+    S["Consumidor<br/>LCD e LEDs"]
+    V["App do validador"]
+    K["Backend"]
+    B(("Broker MQTT/TLS<br/>:8883"))
+    C["Processador"]
+    R[("Rekognition")]
+    O["Observabilidade"]
+    D["Painel admin"]
 
-    P -- "fila/{id}/contagem<br/>fila/{id}/saida<br/>fila/{id}/heartbeat" --> B
-    V -- "HTTPS + token" --> K
-    K -- "fila/{id}/leitura" --> B
-    B -- "contagem, saida,<br/>heartbeat, leitura" --> C
-    K <-. "busca o rosto" .-> R
-    C -- "fila/{id}/resultado<br/>fila/{id}/estado<br/>fila/{id}/recomendacao" --> B
-    B -- "fila/{id}/estado" --> S
-    B -- "fila/{id}/resultado" --> K
-    B -. "tudo menos leitura" .-> K
-    O -- "HTTPS + token de admin" --> K
+    P -- "contagem, saida, heartbeat" --> B
+    V -- "HTTPS" --> K
+    K -- "leitura" --> B
+    K <-. "rosto" .-> R
+    B -- "movimentos e leitura" --> C
+    C -- "resultado, estado, recomendacao" --> B
+    B -- "estado" --> S
+    B -- "resultado" --> K
+    B -- "todos os tópicos" --> O
+    O -- "ao vivo e histórico" --> K
+    D -- "HTTPS, admin" --> K
 ```
 
 1. O **produtor** detecta pelos HC-SR04 quem entra (`contagem`) e quem sai (`saida`) de cada fila e publica também o heartbeat.
 2. O **validador**, logado no app, lê o QR do ingresso e captura o rosto. O **backend** busca o rosto no Rekognition, guarda a foto no S3 e publica a `leitura` com o ingresso, o id do validador, a referência da foto e o usuário reconhecido.
 3. O **processador** mantém o saldo no TimescaleDB a partir dos sensores, mede a vazão pelas saídas e estima a espera. Para cada leitura, confere no banco se quem enviou é validador e se o usuário reconhecido é o dono do ingresso; publica o `resultado`: `aceito`, `recusado` ou `indeterminado`.
-4. O **backend** devolve o resultado ao app, e o validador libera ou barra a pessoa; o **consumidor** acende LEDs e LCD indicando a fila com menor espera; os **admins** acompanham tudo pelo dashboard, que o backend alimenta com o que chega do broker (menos as leituras) e com o banco.
+4. O **backend** devolve o resultado ao app. O **consumidor** mostra no LCD a fila com menor espera. O **painel** lê o ao vivo e o histórico na observabilidade; o backend só confere o admin e repassa. Usuários, ingressos e auditoria vêm do banco, com o papel `painel`.
 
 A ocupação depende só dos sensores: uma pessoa recusada ou que desiste
 continua sendo contada até passar pelo sensor de saída. O reconhecimento
@@ -96,7 +98,7 @@ Todas as mensagens usam o mesmo envelope (`event_id`, `correlation_id`,
 `timestamp` é o instante em que o evento aconteceu, do relógio do ESP32
 sincronizado inicialmente por NTP. O ESP32 atribui um `event_id` único a cada
 movimento (que abre a própria operação: `correlation_id` igual) e o backend, a
-cada leitura. O processador ignora eventos repetidos pelo MQTT.
+cada leitura. Reentrega com o mesmo `event_id` e o mesmo `timestamp` não altera o saldo.
 
 **`fila/{id}/contagem`** — o sensor de entrada detectou uma pessoa entrando na fila.
 
@@ -111,8 +113,11 @@ cada leitura. O processador ignora eventos repetidos pelo MQTT.
 **`fila/{id}/heartbeat`** — a cada 2 s simulados, por fila. Não entra na
 contagem; só prova que o enlace está vivo. O processador mede a atividade pelo
 instante em que recebe o heartbeat em seu relógio monotônico, com tolerância
-de 15 s reais. O `timestamp` não determina essa atividade: no Wokwi, o
-relógio simulado pode avançar mais devagar que o relógio do computador.
+de 15 s reais. O painel marca o enlace inativo aos 8 s. Sem heartbeat nesse
+prazo, o processador deixa de usar a fila como destino e não publica estado
+novo: o LCD permanece no último estado retido. O `timestamp` não determina
+essa atividade: no Wokwi, o relógio simulado pode avançar mais devagar que o
+relógio do computador.
 `payload`: `{"filaId": "fila-a", "sequence": 43}`.
 
 **`sistema/{usuario}/status`** — presença de cada componente, retida:
@@ -163,7 +168,7 @@ confirmar, então pode chegar mais de uma vez, sempre com o mesmo `event_id`.
 | `resultado` | Significado |
 |---|---|
 | `aceito` | o rosto é do dono do ingresso, que ainda não tinha sido usado; o ingresso é marcado como usado |
-| `recusado` | `motivo`: `validador-nao-autorizado`, `rosto-nao-confere`, `ingresso-inexistente` ou `ingresso-ja-usado` |
+| `recusado` | `motivo`: `validador-nao-autorizado`, `rosto-nao-confere`, `ingresso-inexistente`, `ingresso-cancelado` ou `ingresso-ja-usado` |
 | `indeterminado` | `motivo`: `falha-reconhecimento`; o operador decide manualmente |
 
 O backend chama o `SearchFacesByImage` com a foto (semelhança mínima de 95%);
@@ -176,7 +181,7 @@ reentregue pelo broker recebe a mesma resposta, sem gastar o ingresso.
 
 ### Recomendação e estado (processador → consumidor e dashboard)
 
-**`fila/{id}/recomendacao`** — publicada só quando o par (`semaforo`, `sentidoRecomendado`) muda,
+**`fila/{id}/recomendacao`** — QoS 1 e retida, publicada só quando o par (`semaforo`, `sentidoRecomendado`) muda,
 com o `correlation_id` do evento que provocou o recálculo. `payload`:
 
 ```json
@@ -345,11 +350,11 @@ identidades por senha e aplica o princípio do menor privilégio por meio de ACL
 | Identidade | Permissões |
 |---|---|
 | `produtor` | publica entradas, saídas e heartbeat |
-| `consumidor` | somente lê o estado das filas |
-| `processador` | lê movimentos e leituras faciais; publica resultados, estados e recomendações |
-| `observador` | somente lê, tudo; usado pela observabilidade (que descarta a referência da foto das leituras) e para inspecionar o broker (`mosquitto_sub`, `testar-acl.py`) |
-| `validador` | console da demo: lê resultados e o estado das filas |
-| `backend` | publica as leituras dos validadores do app; lê todo o resto (menos leituras) para o dashboard |
+| `consumidor` | lê estado e resultado; publica a reação do LED |
+| `processador` | lê movimentos e leituras; publica resultados, estados, recomendações e rejeitadas |
+| `observador` | só lê, inclusive `fila/+/leitura`; a API da observabilidade descarta `fotoRef` antes de responder ao painel |
+| `validador` | console da demo: lê resultado e estado; não publica leitura |
+| `backend` | publica as leituras do app; lê só `fila/+/resultado` |
 
 O listener sem criptografia foi removido. Toda comunicação usa MQTT sobre TLS na
 porta 8883, e os clientes validam o certificado do broker usando a CA local.
@@ -450,7 +455,7 @@ IP da máquina, rode com `BACKEND_HOST=0.0.0.0` e instale a CA
 | `GET /eu` | logado | dados da conta |
 | `POST /ingressos` | logado | compra (sem pagamento) e devolve o `ingressoId`, que vai no QR code |
 | `GET /ingressos` | logado | ingressos do usuário, usados ou não |
-| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s pelo resultado. Se for aceita, apaga a foto na hora; recusadas e indeterminadas ficam até a regra do bucket (1 dia), para o admin revisar |
+| `POST /leituras` | validador | `{ingressoId, filaId, foto}`: guarda a foto em `leituras/` no S3, publica a leitura e espera até 10 s. Aceita: apaga a foto. Recusada, indeterminada ou 504: a foto fica até 1 dia. No 504 a leitura não é cancelada; quando o processador voltar, ele ainda decide e pode marcar o ingresso. Detalhe em [`docs/caminhos.md`](docs/caminhos.md) |
 
 Ninguém escolhe o próprio papel pelo app: o papel `backend` do banco nem tem
 permissão para escrever a coluna `papel`. Validadores e admins são definidos
@@ -499,8 +504,8 @@ das fotos.
 ### Execução com Docker
 
 Depois da [preparação](#preparação) (os scripts que geram CA, senhas e
-certificados em `.local/`), um comando sobe banco, broker, processador e
-backend com o dashboard já compilado:
+certificados em `.local/`), um comando sobe banco, broker, processador,
+observabilidade e backend com o dashboard já compilado:
 
 ```
 ./docker/preparar.sh          # uma vez: nomes broker/banco nos certificados e o .env
@@ -577,9 +582,11 @@ certificado que contenha o nome DNS/IP do servidor e altere o endereço do
 
 ### Verificação da autorização
 
-Depois de iniciar o broker, um observador autenticado consegue assinar os
-tópicos. Mesmo assinando `fila/#`, ele não recebe `fila/+/leitura`, porque a ACL
-filtra cada mensagem:
+Depois de iniciar o broker, um observador autenticado assina os tópicos.
+`fila/#` inclui `fila/+/leitura`: a ACL do observador é `fila/+/+`, então o
+`fotoRef` aparece no comando abaixo. Quem esconde a referência é a API da
+observabilidade, não o broker. Esse usuário não consegue publicar, e um cliente
+anônimo não conecta.
 
 ```
 mosquitto_sub -h localhost -p 8883 \
