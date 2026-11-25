@@ -4,7 +4,7 @@ Este arquivo cumpre a declaração pedida para o marco. O artigo discute as mesm
 
 ## Simulação
 
-Os sensores de fila e o consumidor de sinalização são firmware de ESP32 no Wokwi, não uma bancada física. A passagem de uma pessoa é o ciclo de distância 400 cm, 40 cm, 400 cm no HC-SR04 simulado. O relógio do simulador pode avançar mais devagar que o da máquina; por isso a atividade do enlace usa o relógio monotônico do processador, com tolerância de 15 s, e não o `timestamp` do ESP32. As duas placas não compartilham um circuito: o Wokwi desta licença não simula os dois microcontroladores no mesmo projeto, e elas se falam pelo broker.
+Os sensores de fila e o consumidor de sinalização são firmware de ESP32 no Wokwi, não uma bancada física. A passagem de uma pessoa é o ciclo de distância 400 cm, 40 cm, 400 cm no HC-SR04 simulado. O relógio do simulador pode avançar mais devagar que o da máquina; por isso a atividade do enlace usa o relógio monotônico do processador, com tolerância de 15 s, e não o `timestamp` do ESP32. Pelo mesmo motivo, a vazão marca cada saída pela hora em que o processador a recebe. As duas placas não compartilham um circuito: o Wokwi desta licença não simula os dois microcontroladores no mesmo projeto, e elas se falam pelo broker.
 
 ## Dados pessoais
 

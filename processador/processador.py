@@ -156,7 +156,9 @@ def processar_mensagem(client, msg):
         if not novo:
             return rejeitar(client, msg, "duplicado", recebido)
         if tipo == "saida" and saidas[fila] > saidas_antes:
-            instante = datetime.fromtimestamp(recebido["timestamp"] / 1000)
+            # Vazão pelo relógio do processador, como o heartbeat: no Wokwi o relógio
+            # do ESP32 atrasa e a saída cairia fora da janela, como se a entrada parasse.
+            instante = datetime.now()
             fila_saidas[fila].append((instante, ocupacao_de(fila)))
     elif tipo == "heartbeat":
         # Não entra na contabilidade: só prova que o enlace está vivo quando
