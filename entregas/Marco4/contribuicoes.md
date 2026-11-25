@@ -17,3 +17,111 @@ O que mudou no Marco 4:
 - Criação do teste `demo_lotacao.py` para demonstrar a mudança de recomendação em tempo real.
 
 Principal contribuição: levar o gerenciamento das filas para o usuário, permitindo que ele saiba diretamente pelo celular qual fila deve escolher.
+
+## João Pedro de Brito Tomé — 202302612
+
+Arquitetura do Marco 4 de ponta a ponta: contrato das mensagens, banco, processador, backend, observabilidade, dashboard de administração, aplicativo móvel, firmware, Docker, testes e documentação.
+
+Os commits são de 06/11 a 13/11/2026; o hash de cada item está entre parênteses. Dois deles (`21124c4` e `662f6cd`) entraram pelo PR #3.
+
+### Contrato das mensagens e broker
+
+- Contrato comum de toda mensagem MQTT: `event_id`, `correlation_id`, `event_type`, `source`, `timestamp` e `payload`. `ler_evento` valida o envelope contra o tópico e descarta o que não casa (`b16f12a`).
+- Presença de cada componente por Last Will: online e offline, retidos, em `sistema/{usuario}/status` (`b16f12a`).
+- ACL separando por papel leitura, resultado, reação e rejeitadas (`b16f12a`).
+- Usuário `monitor`, só de leitura, para o MQTTX. É um usuário à parte porque o broker usa o usuário como client id: entrar como `observador` derrubaria a observabilidade. Inclui a opção `--adicionar-monitor` em `broker/configurar-seguranca.sh` (`3a827c3`).
+
+### Banco de dados (TimescaleDB)
+
+- Tabelas de usuários, ingressos e auditoria (`336d16c`).
+- Tabela `saida` como caixa de saída transacional (transactional outbox) (`336d16c`).
+- Correlação e origem em `movimentos` (`336d16c`).
+- Papéis por componente: `processador`, `backend`, `painel` e `observador` (só leitura), com permissões por coluna e scripts para atualizar um banco existente (`336d16c`).
+- `SELECT` e `INSERT` em `movimentos` para o papel `backend`, necessários no tratamento do 504 (`cf99f81`).
+
+### Processador
+
+- Decisão da leitura na catraca só pelas regras do ingresso: quem leu é validador; o ingresso é do dono do rosto e não foi usado nem cancelado. O rosto chega já reconhecido pelo backend, e o processador não usa AWS (`bd58f7a`).
+- Resultado publicado pela tabela `saida` até o broker confirmar (PUBACK). Numa queda, o pendente sai de novo com o mesmo `event_id` (`bd58f7a`).
+- Mensagens descartadas publicadas em `sistema/processador/rejeitado`, com o motivo (`bd58f7a`).
+
+### Backend (API do app e do dashboard)
+
+- API do aplicativo (`2caaa65`):
+  - cadastro com o rosto (Rekognition), com um rosto por conta;
+  - login com JWT;
+  - compra e listagem de ingressos;
+  - leitura na catraca: o backend reconhece o rosto, guarda a foto no S3, publica a leitura e espera o resultado pelo `correlation_id`.
+- Rotas `/admin`, que conferem no banco, a cada pedido, se a conta é de admin, e fazem a gestão de usuários, ingressos, auditoria e fotos (`2caaa65`).
+- Foto da leitura aceita apagada do S3 assim que o resultado chega. Recusadas e indeterminadas ficam até a regra do bucket (1 dia), para o admin revisar (`eecdd5e`).
+- Modo `BACKEND_SEM_TLS=1`, só para desenvolvimento, com aviso ao iniciar. O padrão continua HTTPS (`e1927f5`).
+- Leitura aceita devolve o nome e o login do dono do ingresso para a catraca (`2b42a6e`).
+- Aba Leituras completada com o dono do ingresso e o login do validador, lidos pelo papel `painel`. A observabilidade continua sem ler dados pessoais (`5baf61b`).
+- Correção (`cf99f81`): com o processador fora do ar, o 504 gastava o ingresso quando o processador voltava, e a nova tentativa dava `ingresso-ja-usado`. A correção:
+  - no 504, o backend grava a leitura como `indeterminado` (`sem-resposta-processador`);
+  - se o processador decidiu nesse meio-tempo, o backend devolve a decisão dele;
+  - backend e processador decidem sob a mesma trava do banco por `evento_id` (`pg_advisory_xact_lock`), e vale quem gravar primeiro;
+  - a leitura leva `validoAte`: vencida, o processador a rejeita como `leitura-expirada` sem tocar no ingresso.
+
+### Observabilidade
+
+- Processo próprio que assina tudo no broker e lê o banco como `observador`, sem gravar nada (`49092dc`).
+- API interna que o backend repassa ao dashboard. Substituiu o painel antigo do observador (`49092dc`).
+
+### Dashboard de administração (React)
+
+- Visão geral ao vivo: componentes, filas, tentativas, reações e rejeitadas (`83f34a4`).
+- Histórico, usuários, ingressos, leituras com foto, movimentos por correlação, estados e auditoria (`83f34a4`).
+- Gráficos de espera média e entradas por minuto, uma linha por fila. São SVG desenhado pelo React, sem biblioteca nova e respeitando a CSP do painel (`099a038`).
+- Catraca no computador para contas de validador: a webcam lê o QR do ingresso (BarcodeDetector, ou o código digitado) e depois o rosto. Mostra a foto capturada e os dados de quem foi liberado (`2b42a6e`).
+- Correção: o enlace do ESP32 aparecia como "Aceito" e passou a aparecer como "no ar" (`a291ae7`).
+
+### Aplicativo móvel (Expo)
+
+- App de clientes e validadores (`04f2d19`):
+  - cadastro com a foto do rosto;
+  - login;
+  - compra de ingressos e QR do ingresso;
+  - para validadores, a catraca, com leitura do QR e captura do rosto.
+
+  O app fala só com o backend.
+- Endereço padrão `http://<máquina do Expo>:8444`, para o celular na rede funcionar sem instalar a CA. `EXPO_PUBLIC_API_URL` troca o endereço (`d002c88`).
+
+### Firmware (Wokwi / ESP32)
+
+- Produtor publica os movimentos no contrato comum (`2e7d564`).
+- Consumidor executa a reação ao resultado da leitura (LED piscando e LCD) e a confirma em `fila/{id}/reacao`, sem decidir nada (`2e7d564`).
+- Sensores aceitam `chegada fila-a` e `saida fila-b` pela serial, passando pelo mesmo caminho dos sensores (buffer, TLS e QoS 1). Isso permite automatizar o teste de ponta a ponta (`1bd0a6f`).
+- Correção: consumidor com keepalive de 60 s e sessão persistente. O Wokwi lento fazia o broker derrubar a conexão a cada 15 a 40 s e perder a reação da catraca (`4be30c6`).
+
+### Infraestrutura
+
+- `docker-compose.yml` com banco, broker, processador, backend e observabilidade (`c7b0d9c`).
+- Modelo do `.env` (`f0e0709`).
+- Remoção do console de demonstração `validador/`: a catraca é o app e o dashboard (`a1cdcbd` atualizou o console para o contrato novo; `97b2301` o removeu).
+
+### Testes
+
+- `tests/e2e_completo.py`, teste de ponta a ponta (`1bd0a6f`):
+  - cria contas com rostos gerados por IA e compra ingressos;
+  - lota a fila-a até fechar e desviar para a fila-b;
+  - passa os clientes na catraca das duas filas (Rekognition, processador e reação do consumidor);
+  - repete o 504 com o processador parado e esvazia as filas.
+- Testes do 504 sem gastar o ingresso no backend e da leitura expirada no processador (`cf99f81`, em `test_backend.py` e `test_heartbeat.py`).
+
+### Documentação
+
+- README e `docs/ARQUITETURA.md` com o contrato, a outbox, a observabilidade e os papéis (`1a1baef`).
+- Situação atual da implementação, regras de segurança por componente e o motivo do banco compartilhado (`21124c4`).
+- Passo a passo para rodar localmente, com uma tabela de problemas comuns (`662f6cd`):
+  - requisitos e configuração da AWS (bucket, regra de 1 dia, coleção e perfil);
+  - segredos, Docker e contas de teste;
+  - painel e catraca no computador;
+  - app no celular, ESP32 e testes.
+- `mobile/README.md` com o modo HTTP e como voltar ao HTTPS (`d002c88`).
+
+### Ainda não commitado
+
+- Testes unitários sem banco e sem broker, 75 casos, cobrindo as funções de `senhas`, `mqtt_config`, `modelos`, `estado_filas`, backend, observabilidade e processador: `tests/test_unidades.py` e `tests/test_unidades_processador.py`.
+
+Principal contribuição: transformar o protótipo do Marco 3 no sistema completo do Marco 4. O ingresso com reconhecimento facial passou a ser decidido pelo processador, com a resposta garantida pela outbox. O usuário passou a ter o app no celular, e o administrador, o dashboard com o ao vivo e o histórico.
