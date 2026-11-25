@@ -73,10 +73,14 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     working_dir: /projeto
     # A mesma configuração do host; só o listener passa a aceitar os outros contêineres.
+    # No Docker Desktop do Windows o volume aparece com permissão 0777. O Mosquitto
+    # 2.1.2 avisa e em seguida cai (sinal 11) ao carregar senha, ACL ou certificado
+    # nesse estado. As cópias em /tmp ficam 0600; o listener segue aberto para os
+    # outros contêineres.
     command:
       - sh
       - -c
-      - sed 's/^listener 8883 127.0.0.1$$/listener 8883/' broker/mosquitto.conf > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf
+      - mkdir -p /tmp/segredos && cp .local/mqtt/mosquitto.passwd .local/mqtt/broker.crt .local/mqtt/broker.key /tmp/segredos/ && cp broker/mosquitto.acl /tmp/segredos/ && chmod 600 /tmp/segredos/* && sed -e 's/^listener 8883 127.0.0.1$$/listener 8883/' -e 's|^password_file .local/mqtt/mosquitto.passwd|password_file /tmp/segredos/mosquitto.passwd|' -e 's|^acl_file broker/mosquitto.acl|acl_file /tmp/segredos/mosquitto.acl|' -e 's|^certfile .local/mqtt/broker.crt|certfile /tmp/segredos/broker.crt|' -e 's|^keyfile .local/mqtt/broker.key|keyfile /tmp/segredos/broker.key|' broker/mosquitto.conf > /tmp/mosquitto.conf && exec mosquitto -c /tmp/mosquitto.conf
     ports:
       - "127.0.0.1:8883:8883"
     volumes:

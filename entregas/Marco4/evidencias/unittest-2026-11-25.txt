@@ -1,0 +1,89 @@
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_dashboard (test_admin.AdminTest.test_dashboard) ... Exception in thread paho-mqtt-client-:
+Traceback (most recent call last):
+  File "C:\Python312\Lib\threading.py", line 1075, in _bootstrap_inner
+    self.run()
+  File "C:\Python312\Lib\threading.py", line 1012, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py", line 4523, in _thread_main
+    self.loop_forever(retry_first_connection=True)
+  File "C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py", line 2324, in loop_forever
+    self.reconnect()
+  File "C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py", line 1550, in reconnect
+    raise ValueError('Invalid host.')
+ValueError: Invalid host.
+ok
+test_processador_fora_nao_gasta_o_ingresso (test_apresentacao.ApresentacaoTest.test_processador_fora_nao_gasta_o_ingresso)
+Na apresentação o processador ainda está subindo. A catraca não pode queimar o QR. ... C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1384, family=2, type=1, proto=0, laddr=('127.0.0.1', 49680), raddr=('127.0.0.1', 49679)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1312, family=2, type=1, proto=0, laddr=('127.0.0.1', 49679), raddr=('127.0.0.1', 49680)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_processador_no_ar_libera_o_dono (test_apresentacao.ApresentacaoTest.test_processador_no_ar_libera_o_dono) ... C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1580, family=2, type=1, proto=0, laddr=('127.0.0.1', 49701), raddr=('127.0.0.1', 49700)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1604, family=2, type=1, proto=0, laddr=('127.0.0.1', 49700), raddr=('127.0.0.1', 49701)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_fila_recomendada_para_quem_chega (test_backend.BackendTest.test_fila_recomendada_para_quem_chega) ... C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1068, family=2, type=1, proto=0, laddr=('127.0.0.1', 49706), raddr=('127.0.0.1', 49705)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1576, family=2, type=1, proto=0, laddr=('127.0.0.1', 49705), raddr=('127.0.0.1', 49706)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\psycopg\_connection_base.py:153: ResourceWarning: <psycopg.Connection object at 0x00000207812D40E0> was deleted while still open. Please use 'with' or '.close()' to close the connection properly
+  __warn(
+ok
+test_fluxo_do_app (test_backend.BackendTest.test_fluxo_do_app) ... C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1640, family=2, type=1, proto=0, laddr=('127.0.0.1', 49711), raddr=('127.0.0.1', 49710)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+C:\Users\caiom\projects\Leite-de-Pedra\.venv\Lib\site-packages\paho\mqtt\client.py:2343: ResourceWarning: unclosed <socket.socket fd=1468, family=2, type=1, proto=0, laddr=('127.0.0.1', 49710), raddr=('127.0.0.1', 49711)>
+  self._sockpairR, self._sockpairW = _socketpair_compat()
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_aceita_so_mensagem_do_contrato_que_combina_com_o_topico (test_contrato.ContratoTest.test_aceita_so_mensagem_do_contrato_que_combina_com_o_topico) ... ok
+test_persiste_e_deduplica_movimentos (test_estado_filas.EstadoFilasTest.test_persiste_e_deduplica_movimentos) ... ok
+test_horario_antigo_do_esp_nao_bloqueia_estado (test_heartbeat.HeartbeatTest.test_horario_antigo_do_esp_nao_bloqueia_estado) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 7.420s
+
+OK
+Mensagem rejeitada em fila/fila-a/leitura: leitura-expirada
+Leitura 617b98ad1542415c9d82e614e1e3fae8 na fila-a, ingresso D82960DA938E: aceito
+Leitura 210e4fb30dd049ad8b62959cdf91234c na fila-a, ingresso DAB49DD927C6: aceito
+Falha no reconhecimento: AWS fora
+Fila descoberta: fila-a (1 no total)
+Fila fila-a sem dados atualizados - mantendo recomendação anterior
+[92m● VERDE[0m  fila-a entrou em operação
+Leitura leitura-0 na fila-a, ingresso ING-1: aceito
+Leitura leitura-0 na fila-a, ingresso ING-1: aceito
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-1 na fila-a, ingresso ING-1: recusado (ingresso-ja-usado)
+Leitura leitura-1 na fila-a, ingresso ING-1: recusado (ingresso-ja-usado)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-2 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Leitura leitura-2 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-3 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Leitura leitura-3 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-4 na fila-a, ingresso NAO-EXISTE: recusado (ingresso-inexistente)
+Leitura leitura-4 na fila-a, ingresso NAO-EXISTE: recusado (ingresso-inexistente)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-5 na fila-a, ingresso ING-2: indeterminado (falha-reconhecimento)
+Leitura leitura-5 na fila-a, ingresso ING-2: indeterminado (falha-reconhecimento)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-6 na fila-a, ingresso ING-2: recusado (validador-nao-autorizado)
+Leitura leitura-6 na fila-a, ingresso ING-2: recusado (validador-nao-autorizado)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura atrasada-0 na fila-a, ingresso ING-3: indeterminado (sem-resposta-processador)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Mensagem rejeitada em fila/fila-a/leitura: leitura-expirada
+Mensagem rejeitada em fila/fila-a/leitura: leitura-incompleta
+Mensagem rejeitada em fila/fila-a/leitura: leitura-incompleta
+Mensagem rejeitada em fila/fila-a/heartbeat: fora-do-contrato
