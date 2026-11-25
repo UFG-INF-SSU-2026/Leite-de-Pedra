@@ -1,6 +1,6 @@
 # Grupo Leite de Pedra: Caio Castro Miranda, João Pedro de Brito Tomé, João Victor Braga e Jaime da Cruz
 
-# Marco 3 — balanceamento seguro de filas de entrada
+# Leite de Pedra — balanceamento de filas de entrada
 
 O sistema conta quem entra e quem sai de cada fila de entrada de um evento,
 estima o tempo de espera e sinaliza num semáforo (verde, amarelo, vermelho)
@@ -8,6 +8,26 @@ qual fila procurar, para que um pico de chegada se distribua em vez de
 empilhar numa fila só. Na catraca, a pessoa é identificada pelo rosto: o
 backend compara a foto com a coleção do AWS Rekognition, e o processador
 decide se o ingresso vale.
+
+## Marco 4
+
+Os artefatos deste marco ficam em [`entregas/Marco4/`](entregas/Marco4/). Este README continua sendo o roteiro de instalação, configuração e execução.
+
+| Entrega | Onde | Situação nesta versão |
+|---|---|---|
+| Diagrama | [fluxo neste README](#fluxo) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#visão-geral) | atual |
+| Contratos | [payloads](#payloads) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#contrato-das-mensagens) | envelope, tópicos e validação |
+| Verificação do enunciado | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md#verificação-pedida-no-enunciado) | passos, esperado, observado e evidência das quatro verificações |
+| Testes e resultados | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md) | comando, módulos e saídas em `entregas/Marco4/evidencias/` |
+| Artigo | [`entregas/Marco4/artigo.pdf`](entregas/Marco4/artigo.pdf) | texto no repositório; o grupo ainda precisa revisar |
+| Implantação | este arquivo e [`mobile/README.md`](mobile/README.md) | ordem de subida, credenciais de teste e canal HTTPS do app |
+| Limitações | [`entregas/Marco4/limitacoes.md`](entregas/Marco4/limitacoes.md) | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
+| Uso de IA na redação destes arquivos | [`entregas/Marco4/uso-de-ia.md`](entregas/Marco4/uso-de-ia.md) | rascunho assistido; a validação é do grupo |
+| Contribuições individuais | [`entregas/Marco4/contribuicoes.md`](entregas/Marco4/contribuicoes.md) | Caio Castro Miranda; as demais ainda não foram escritas |
+| Vídeo do Marco 4 | link ainda não publicado | quando existir, substituir esta célula pelo URL acessível ao professor |
+| Pendências do marco | [`entregas/Marco4/pendencias.md`](entregas/Marco4/pendencias.md) | APK, vídeo e as contribuições que ainda não foram escritas |
+
+Não há APK no repositório. A suíte automatizada não testa APK. O caminho do app que atende o canal protegido é o HTTPS de [`mobile/README.md`](mobile/README.md). `BACKEND_SEM_TLS=1` deixa senhas, tokens e fotos sem criptografia e não atende essa verificação.
 
 ## Estrutura do repositório
 
@@ -331,6 +351,8 @@ duas simulações; elas usam o broker publicado em `host.wokwi.internal:8883`.
 .venv/bin/python -m unittest discover -s tests   # precisa do banco no ar
 ```
 
+No Windows, com o ambiente desta máquina: `.venv\Scripts\python.exe -m unittest discover -s tests`. O comando, os módulos, a relação com os requisitos e a saída da última execução estão em [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md). Essa suíte não cobre o APK.
+
 Ponta a ponta, com tudo no ar (Docker, AWS e as duas simulações do Wokwi):
 
 ```
@@ -353,7 +375,7 @@ QR e o seu rosto, e a partir daí as filas andam e mais gente chega.
 | Sintoma | Causa e solução |
 |---|---|
 | App mostra "Sem conexão com o servidor" | O pedido não chegou ao backend. Confira se `EXPO_PUBLIC_API_URL` tem o IP da máquina (não `localhost`), se o Safari do celular abre `https://<ip>:8444/eu` sem aviso de certificado e se não há VPN ligada no celular. |
-| Celular não confia na CA e não dá para resolver na hora | Só em desenvolvimento: `BACKEND_SEM_TLS=1` no `.env`, `docker compose up -d backend` e `EXPO_PUBLIC_API_URL=http://<ip>:8444`. Senhas, tokens e fotos passam sem criptografia; apague a linha depois. |
+| Celular não confia na CA e não dá para resolver na hora | Fora da demonstração do Marco 4, e só para destravar o desenvolvimento: `BACKEND_SEM_TLS=1` no `.env`, `docker compose up -d backend` e `EXPO_PUBLIC_API_URL=http://<ip>:8444`. Senhas, tokens e fotos passam sem criptografia. Apague a variável e volte ao HTTPS de [`mobile/README.md`](mobile/README.md) antes de gravar o vídeo ou apresentar. |
 | Painel pelo Vite (`npm run dev`) responde HTTP 500 | O Vite repassa a API para `https://localhost:8444`. Com o backend em HTTP, rode `BACKEND_URL=http://localhost:8444 npm run dev`. |
 | Catraca do painel não abre a câmera | O painel foi aberto por um IP. Use `localhost` na própria máquina. |
 | Certificado não vale para o IP | O IP da máquina mudou. Emita de novo o certificado do backend com o IP novo e reinicie o backend. |
@@ -638,3 +660,4 @@ Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas co
 | [`entregas/Marco1/`](entregas/Marco1/) | Protótipos individuais no Wokwi, um por integrante, com relatório e evidências dos testes. |
 | [`entregas/Marco2/`](entregas/Marco2/) | Primeira integração produtor → MQTT → processador, com README e roteiro de demonstração próprios. |
 | [`entregas/Marco3/`](entregas/Marco3/) | Apresentação de segurança (TLS, autenticação e ACL), aberta direto no navegador (os terminais ao vivo dependiam do console da demo, removido). O código do Marco 3 é o próprio repositório. |
+| [`entregas/Marco4/`](entregas/Marco4/) | Marco 4: artigo, evidência dos testes, limitações, declaração de uso de IA, contribuições individuais e a lista do que ainda falta (APK e vídeo). |
