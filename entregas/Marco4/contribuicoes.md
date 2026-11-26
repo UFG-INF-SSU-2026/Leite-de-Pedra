@@ -208,8 +208,6 @@ Principal contribuição: a concepção do sistema e as regras que o sustentam �
 problema, a solução, o que conta como dado válido, como a espera é estimada e
 quando a recomendação muda — além do artigo que descreve tudo isso.
 
-- Testes unitários sem banco e sem broker, 75 casos, cobrindo as funções de `senhas`, `mqtt_config`, `modelos`, `estado_filas`, backend, observabilidade e processador: `tests/test_unidades.py` e `tests/test_unidades_processador.py`.
-
 ### Ainda não commitado
 
 ## Jaime da Cruz — 202302611
