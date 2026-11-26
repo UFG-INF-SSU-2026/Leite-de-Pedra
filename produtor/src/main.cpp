@@ -187,6 +187,9 @@ void setup() {
   while (time(nullptr) < 1700000000) delay(100);
   tls.setCACert(MQTT_CA);
   mqtt.begin(BROKER, 8883, tls);
+  // O padrão (10 s) é curto para o Wokwi: o relógio simulado anda mais devagar
+  // que o do broker, o PING atrasa e a conexão cai por "exceeded timeout".
+  mqtt.setKeepAlive(60);
   conectarMqtt();
 }
 
