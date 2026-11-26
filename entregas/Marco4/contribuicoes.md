@@ -38,14 +38,14 @@ Cada recomendação sai com o motivo em texto: a cor, a espera e a ocupação da
 
 ### Documentação
 
-Definição do formato atual dos Markdown. O README deixa de ser um marco numerado e passa a ser o roteiro único de instalação, configuração e execução. A seção Marco 4 é só o índice: cada entrega do enunciado aponta para um arquivo, com a situação desta versão, em vez de o texto do marco crescer dentro do README. `docs/caminhos.md` (`77fbaf3`) separa os quatro caminhos de uso. O pacote do marco (`37ab434`) traz o artigo, o registro dos testes com a saída em `evidencias/`, as limitações, o uso de IA, as pendências e `gerar_pdf.py`.
+Definição do formato atual dos Markdown. O README deixa de ser um marco numerado e passa a ser o roteiro único de instalação, configuração e execução. A seção Marco 4 é só o índice: cada entrega do enunciado aponta para um arquivo, com a situação desta versão, em vez de o texto do marco crescer dentro do README. `docs/caminhos.md` (`77fbaf3`) separa os quatro caminhos de uso. O pacote do marco (`37ab434`) traz o artigo, o registro dos testes com a saída em `evidencias/`, as limitações, o uso de IA, as pendências e `gerar_pdf.py`, que só gera a versão sem capa. O PDF entregue é exportado do Word a partir de `artigo.docx`, e `artigo.md` repete esse texto.
 
 | Arquivo | O que o leitor encontra ali, e não repetido nos outros |
 |---|---|
 | `README.md` | fluxo resumido, payloads, como subir o sistema, problemas comuns e a tabela de entregas por marco |
 | `docs/ARQUITETURA.md` | diagrama, componentes, tópicos, contrato do envelope, os dois fluxos, segurança e persistência |
 | `docs/caminhos.md` | os quatro caminhos de uso: feliz, comum, ruim e não esperado |
-| `entregas/Marco4/artigo.md` | o texto do artigo; o PDF é gerado dele |
+| `entregas/Marco4/artigo.md` | o texto do artigo, igual ao do PDF; o PDF é exportado de artigo.docx |
 | `entregas/Marco4/testes.md` | comando, módulos e o que foi observado, com a saída em `evidencias/` |
 | `entregas/Marco4/limitacoes.md` | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
 | `entregas/Marco4/uso-de-ia.md` | o que a redação destes arquivos usou de assistência |

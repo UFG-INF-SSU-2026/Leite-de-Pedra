@@ -1,6 +1,6 @@
 # Testes automatizados — Marco 4
 
-A suíte não inclui teste de APK. O pacote não está no repositório, e um teste desse artefato não foi criado.
+A suíte não inclui teste de APK. O pacote existe: é o build EAS linkado no README da raiz, e não entra no Git por causa do tamanho. Nenhum teste automatizado instala esse arquivo.
 
 ## Verificação pedida no enunciado
 

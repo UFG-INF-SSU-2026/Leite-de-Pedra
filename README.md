@@ -23,9 +23,9 @@ Os artefatos deste marco ficam em [`entregas/Marco4/`](entregas/Marco4/). Este R
 | Implantação | este arquivo e [`mobile/README.md`](mobile/README.md) | ordem de subida, credenciais de teste e canal HTTPS do app |
 | Limitações | [`entregas/Marco4/limitacoes.md`](entregas/Marco4/limitacoes.md) | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
 | Uso de IA na redação destes arquivos | [`entregas/Marco4/uso-de-ia.md`](entregas/Marco4/uso-de-ia.md) | rascunho assistido; a validação é do grupo |
-| Contribuições individuais | [`entregas/Marco4/contribuicoes.md`](entregas/Marco4/contribuicoes.md) | Caio Castro Miranda; as demais ainda não foram escritas |
+| Contribuições individuais | [`entregas/Marco4/contribuicoes.md`](entregas/Marco4/contribuicoes.md) | os quatro integrantes |
 | Vídeo do Marco 4 | [apresentação no Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing) | fora do repositório |
-| Pendências do marco | [`entregas/Marco4/pendencias.md`](entregas/Marco4/pendencias.md) | demonstração do APK instalado e as contribuições que ainda não foram escritas |
+| Pendências do marco | [`entregas/Marco4/pendencias.md`](entregas/Marco4/pendencias.md) | instalação do APK mostrada no aparelho; o pacote em si já está linkado acima |
 
 APK Android (build EAS, perfil `apk` de [`mobile/eas.json`](mobile/eas.json)):
 
