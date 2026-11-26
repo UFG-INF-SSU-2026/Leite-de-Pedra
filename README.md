@@ -2,6 +2,7 @@
 
 # Leite de Pedra — balanceamento de filas de entrada
 
+
 O sistema conta quem entra e quem sai de cada fila de entrada de um evento,
 estima o tempo de espera e sinaliza num semáforo (verde, amarelo, vermelho)
 qual fila procurar, para que um pico de chegada se distribua em vez de
