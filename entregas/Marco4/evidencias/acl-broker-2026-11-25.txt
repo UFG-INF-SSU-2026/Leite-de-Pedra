@@ -1,0 +1,11 @@
+Trecho do log do Mosquitto 2.1.2 na mesma execução de broker/testar-acl.py
+(25/11/2026). Não há senha neste arquivo.
+
+1795637494: New client connected from 172.20.0.1:60700 as processador (p4, c1, k60, u'processador').
+1795637494: Client processador negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384
+1795637496: New client connected from 172.20.0.1:43926 as produtor (p4, c1, k60, u'produtor').
+1795637496: Client produtor negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384
+1795637499: New client connected from 172.20.0.1:43936 as produtor (p4, c1, k60, u'produtor').
+1795637499: Client produtor negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384
+1795637499: Client processador disconnected.
+1795637500: Client produtor disconnected.

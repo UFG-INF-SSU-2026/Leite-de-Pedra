@@ -1,0 +1,366 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Arquitetura Leite de Pedra</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: um diagrama largo no topo (lido da esquerda para a direita: pessoas → serviços → dispositivos), detalhes em três blocos abaixo. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --fg: #1b2230; --muted: #5c6678; --line: #d5dae3;
+  --dev: #fff4e3; --dev-s: #c98a2b;
+  --svc: #e6f3f1; --svc-s: #2f8a7c;
+  --data: #ecebfb; --data-s: #5b55c4;
+  --ext: #eef0f3; --ext-s: #7a8496;
+  --mqtt: #d0662c; --http: #2f6fc4; --sql: #6a55c9; --aws: #7a8496;
+  --f-disp: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151b; --surface: #1a1f28; --fg: #e4e8ef; --muted: #98a2b4; --line: #2e3542;
+  --dev: #2c2417; --dev-s: #d9a24e; --svc: #15292a; --svc-s: #4fb3a3;
+  --data: #1f1e36; --data-s: #8f89e8; --ext: #1f242d; --ext-s: #8a94a6;
+  --mqtt: #ee8a52; --http: #6aa2ea; --sql: #a08ff0; --aws: #8a94a6; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1a1f28; --fg: #e4e8ef; --muted: #98a2b4; --line: #2e3542;
+  --dev: #2c2417; --dev-s: #d9a24e; --svc: #15292a; --svc-s: #4fb3a3;
+  --data: #1f1e36; --data-s: #8f89e8; --ext: #1f242d; --ext-s: #8a94a6;
+  --mqtt: #ee8a52; --http: #6aa2ea; --sql: #a08ff0; --aws: #8a94a6; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 48px; }
+main { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2 { font-family: var(--f-disp); font-weight: 600; text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; letter-spacing: -0.01em; }
+h2 { font-size: 18px; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+code, .mono { font-family: var(--f-mono); font-size: 0.86em; }
+
+.legenda { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.legenda span { display: inline-flex; align-items: center; gap: 8px; }
+.legenda i { display: inline-block; width: 22px; height: 0; border-top: 2px solid; }
+.legenda b { display: inline-block; width: 14px; height: 14px; border: 1.5px solid; border-radius: 3px; }
+
+.quadro { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+.quadro svg { display: block; width: 100%; min-width: 900px; height: auto; }
+
+svg text { font-family: var(--f-body); fill: var(--fg); }
+svg .tt { font-family: var(--f-disp); font-weight: 600; font-size: 16px; }
+svg .st { font-size: 12.5px; fill: var(--muted); }
+svg .ep { font-family: var(--f-mono); font-size: 11px; fill: var(--fg); }
+svg .lb { font-family: var(--f-mono); font-size: 10.5px; }
+svg .grp { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); letter-spacing: .04em; }
+.dev { fill: var(--dev); stroke: var(--dev-s); }
+.svc { fill: var(--svc); stroke: var(--svc-s); }
+.data { fill: var(--data); stroke: var(--data-s); }
+.ext { fill: var(--ext); stroke: var(--ext-s); }
+.dev, .svc, .data, .ext { stroke-width: 1.5; }
+.borda { fill: none; stroke: var(--muted); stroke-dasharray: 6 5; stroke-width: 1.2; }
+.e { fill: none; stroke-width: 1.8; }
+.mqtt { stroke: var(--mqtt); } .http { stroke: var(--http); } .sql { stroke: var(--sql); } .aws { stroke: var(--aws); stroke-dasharray: 5 4; }
+.lb.mqtt { fill: var(--mqtt); stroke: none; } .lb.http { fill: var(--http); stroke: none; } .lb.sql { fill: var(--sql); stroke: none; } .lb.aws { fill: var(--aws); stroke: none; }
+.m-mqtt { fill: var(--mqtt); } .m-http { fill: var(--http); } .m-sql { fill: var(--sql); } .m-aws { fill: var(--aws); }
+
+.blocos { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; align-items: start; }
+.bloco { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; min-width: 0; display: grid; gap: 12px; }
+.bloco p { margin: 0; color: var(--muted); font-size: 14px; }
+.tab { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; }
+.tag { font-family: var(--f-mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; }
+ol li::marker { font-family: var(--f-mono); color: var(--mqtt); }
+.largo { grid-column: 1 / -1; }
+.colunas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; }
+.colunas > div { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.colunas h3 { margin: 0; font-family: var(--f-disp); font-size: 15px; font-weight: 600; }
+.colunas ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+pre { margin: 0; font-family: var(--f-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+</style>
+
+<main>
+<header>
+  <h1>Arquitetura Leite de Pedra</h1>
+  <p>Controle de filas e entrada com reconhecimento facial. Desenho tirado do código do branch <code>marco3</code>: <code>docker-compose.yml</code>, <code>broker/mosquitto.acl</code>, <code>backend/</code>, <code>processador/</code>, <code>observabilidade/</code>, <code>produtor/src/</code>, <code>banco/*.sql</code>.</p>
+</header>
+
+<div class="legenda" aria-label="Legenda">
+  <span><i style="border-color:var(--mqtt)"></i>MQTT sobre TLS (QoS 1)</span>
+  <span><i style="border-color:var(--http)"></i>HTTPS / HTTP</span>
+  <span><i style="border-color:var(--sql)"></i>SQL (TLS verify-full, um papel por serviço)</span>
+  <span><i style="border-color:var(--aws);border-top-style:dashed"></i>AWS (boto3)</span>
+  <span><b style="background:var(--dev);border-color:var(--dev-s)"></b>cliente / dispositivo</span>
+  <span><b style="background:var(--svc);border-color:var(--svc-s)"></b>serviço</span>
+  <span><b style="background:var(--data);border-color:var(--data-s)"></b>dados</span>
+</div>
+
+<div class="quadro">
+<svg viewBox="0 0 1240 940" role="img" aria-label="Diagrama de componentes: app e painel falam HTTPS com o backend; backend, processador, observabilidade, ESP32s e console falam MQTT com o broker; serviços gravam e leem o TimescaleDB; backend usa Rekognition e S3.">
+  <defs>
+    <marker id="a-mqtt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-mqtt"/></marker>
+    <marker id="a-http" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-http"/></marker>
+    <marker id="a-sql" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-sql"/></marker>
+    <marker id="a-aws" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="m-aws"/></marker>
+  </defs>
+
+  <!-- fronteira do docker compose -->
+  <rect class="borda" x="310" y="160" width="620" height="760" rx="14"/>
+  <text class="grp" x="918" y="182" text-anchor="end">DOCKER COMPOSE · PORTAS SÓ EM 127.0.0.1</text>
+  <text class="grp" x="30" y="200">FORA DO DOCKER</text>
+  <text class="grp" x="1010" y="200">FORA DO DOCKER</text>
+
+  <!-- AWS -->
+  <rect class="ext" x="340" y="30" width="240" height="90" rx="8"/>
+  <text class="tt" x="356" y="56">AWS</text>
+  <text class="st" x="356" y="78">Rekognition · coleção de rostos</text>
+  <text class="st" x="356" y="97">S3 · fotos em leituras/</text>
+
+  <!-- clientes à esquerda -->
+  <rect class="dev" x="30" y="215" width="230" height="110" rx="8"/>
+  <text class="tt" x="46" y="241">App mobile</text>
+  <text class="st" x="46" y="261">Expo / React Native</text>
+  <text class="st" x="46" y="282">cliente: cadastro com foto,</text>
+  <text class="st" x="46" y="298">ingressos com QR</text>
+  <text class="st" x="46" y="314">validador: catraca (QR + rosto)</text>
+
+  <rect class="dev" x="30" y="375" width="230" height="95" rx="8"/>
+  <text class="tt" x="46" y="401">Painel admin</text>
+  <text class="st" x="46" y="421">React + Vite, servido em /painel</text>
+  <text class="st" x="46" y="440">visão geral, usuários,</text>
+  <text class="st" x="46" y="456">ingressos, registros</text>
+
+  <!-- backend -->
+  <rect class="svc" x="340" y="215" width="240" height="255" rx="8"/>
+  <text class="tt" x="356" y="241">backend</text>
+  <text class="st" x="356" y="261">FastAPI · HTTPS :8444 · JWT HS256</text>
+  <text class="ep" x="356" y="290">POST /usuarios</text>
+  <text class="ep" x="356" y="308">POST /sessoes</text>
+  <text class="ep" x="356" y="326">GET  /eu</text>
+  <text class="ep" x="356" y="344">GET|POST /ingressos</text>
+  <text class="ep" x="356" y="362">POST /leituras</text>
+  <text class="ep" x="356" y="380">/admin/*  (papel admin)</text>
+  <text class="ep" x="356" y="398">/painel   (SPA estática)</text>
+  <text class="st" x="356" y="426">espera o resultado pelo</text>
+  <text class="st" x="356" y="443">correlation_id (até 10 s)</text>
+
+  <!-- broker -->
+  <rect class="ext" x="690" y="215" width="210" height="305" rx="8" style="stroke:var(--mqtt)"/>
+  <text class="tt" x="706" y="241">broker</text>
+  <text class="st" x="706" y="261">Mosquitto 2.1 · MQTTS :8883</text>
+  <text class="st" x="706" y="290">TLS 1.2, sem anônimo</text>
+  <text class="st" x="706" y="308">senha argon2 por usuário</text>
+  <text class="st" x="706" y="326">ACL por tópico e usuário</text>
+  <text class="st" x="706" y="344">persistência + retidos</text>
+  <text class="st" x="706" y="362">Last Will em</text>
+  <text class="ep" x="706" y="380">sistema/{usuário}/status</text>
+  <text class="ep" x="706" y="420">fila/{filaId}/{tipo}</text>
+  <text class="ep" x="706" y="438">sistema/{origem}/{tipo}</text>
+
+  <!-- dispositivos à direita -->
+  <rect class="dev" x="1010" y="215" width="210" height="100" rx="8"/>
+  <text class="tt" x="1026" y="241">ESP32 produtor</text>
+  <text class="st" x="1026" y="261">Wokwi · main.cpp</text>
+  <text class="st" x="1026" y="281">4 sensores ultrassônicos</text>
+  <text class="st" x="1026" y="298">entrada e saída de fila-a, fila-b</text>
+
+  <rect class="dev" x="1010" y="345" width="210" height="100" rx="8"/>
+  <text class="tt" x="1026" y="371">ESP32 sinalização</text>
+  <text class="st" x="1026" y="391">Wokwi · consumidor.cpp</text>
+  <text class="st" x="1026" y="411">LCD 20x4 + semáforo por fila</text>
+  <text class="st" x="1026" y="428">pisca a decisão da catraca</text>
+
+  <rect class="dev" x="1010" y="475" width="210" height="90" rx="8"/>
+  <text class="tt" x="1026" y="501">Console da demo</text>
+  <text class="st" x="1026" y="521">validador/servidor.py · :8000</text>
+  <text class="st" x="1026" y="540">estado, resultados, seriais e logs</text>
+
+  <!-- processador -->
+  <rect class="svc" x="700" y="640" width="210" height="135" rx="8"/>
+  <text class="tt" x="716" y="666">processador</text>
+  <text class="st" x="716" y="686">único que decide</text>
+  <text class="st" x="716" y="706">semáforo por espera estimada</text>
+  <text class="st" x="716" y="724">recomenda a fila melhor</text>
+  <text class="st" x="716" y="742">valida a leitura no banco</text>
+  <text class="st" x="716" y="760">outbox: tabela saida</text>
+
+  <!-- observabilidade -->
+  <rect class="svc" x="400" y="640" width="200" height="120" rx="8"/>
+  <text class="tt" x="416" y="666">observabilidade</text>
+  <text class="st" x="416" y="686">FastAPI :8090, só rede interna</text>
+  <text class="st" x="416" y="706">/ao-vivo: o que passa no broker</text>
+  <text class="st" x="416" y="724">histórico: consultas no banco</text>
+  <text class="st" x="416" y="742">não grava, não autentica</text>
+
+  <!-- banco -->
+  <rect class="data" x="340" y="830" width="570" height="76" rx="8"/>
+  <text class="tt" x="356" y="856">banco · TimescaleDB 2.17 (PostgreSQL 17) · :5433, TLS, SCRAM</text>
+  <text class="ep" x="356" y="878">filas · movimentos* · estados* · usuarios · ingressos · auditoria · saida</text>
+  <text class="st" x="356" y="896">* hypertables, com agregados contínuos por minuto · um banco para todos os serviços (ver abaixo)</text>
+
+  <!-- HTTP -->
+  <path class="e http" d="M260,270 H338" marker-end="url(#a-http)"/>
+  <text class="lb http" x="299" y="262" text-anchor="middle">HTTPS</text>
+  <path class="e http" d="M260,425 H338" marker-end="url(#a-http)"/>
+  <text class="lb http" x="299" y="417" text-anchor="middle">HTTPS</text>
+  <path class="e http" d="M500,470 V638" marker-end="url(#a-http)"/>
+  <text class="lb http" x="508" y="560">repassa /admin</text>
+  <text class="lb http" x="508" y="574">ao vivo e histórico</text>
+
+  <!-- AWS -->
+  <path class="e aws" d="M460,215 V122" marker-end="url(#a-aws)"/>
+  <text class="lb aws" x="468" y="150">reconhecer rosto</text>
+  <text class="lb aws" x="468" y="164">guardar foto</text>
+
+  <!-- MQTT: backend -->
+  <path class="e mqtt" d="M580,300 H688" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="635" y="292" text-anchor="middle">pub leitura</text>
+  <path class="e mqtt" d="M690,350 H582" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="635" y="342" text-anchor="middle">sub resultado</text>
+
+  <!-- MQTT: dispositivos -->
+  <path class="e mqtt" d="M1010,275 H902" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="955" y="253" text-anchor="middle">pub contagem,</text>
+  <text class="lb mqtt" x="955" y="266" text-anchor="middle">saida, heartbeat</text>
+  <path class="e mqtt" d="M900,380 H1008" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="955" y="360" text-anchor="middle">sub estado,</text>
+  <text class="lb mqtt" x="955" y="372" text-anchor="middle">resultado</text>
+  <path class="e mqtt" d="M1010,420 H902" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="955" y="412" text-anchor="middle">pub reacao</text>
+  <path class="e mqtt" d="M900,505 H1008" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="955" y="485" text-anchor="middle">sub estado,</text>
+  <text class="lb mqtt" x="955" y="497" text-anchor="middle">resultado</text>
+
+  <!-- MQTT: processador -->
+  <path class="e mqtt" d="M760,520 V638" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="752" y="560" text-anchor="end">sub contagem,</text>
+  <text class="lb mqtt" x="752" y="573" text-anchor="end">saida, heartbeat,</text>
+  <text class="lb mqtt" x="752" y="586" text-anchor="end">leitura</text>
+  <path class="e mqtt" d="M850,640 V522" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="858" y="560">pub estado,</text>
+  <text class="lb mqtt" x="858" y="573">recomendacao,</text>
+  <text class="lb mqtt" x="858" y="586">resultado,</text>
+  <text class="lb mqtt" x="858" y="599">rejeitado</text>
+
+  <!-- MQTT: observabilidade -->
+  <path class="e mqtt" d="M690,500 H630 V700 H602" marker-end="url(#a-mqtt)"/>
+  <text class="lb mqtt" x="622" y="580" text-anchor="middle" transform="rotate(-90 622 580)">sub tudo (só lê)</text>
+
+  <!-- SQL -->
+  <path class="e sql" d="M365,470 V828" marker-end="url(#a-sql)"/>
+  <text class="lb sql" x="357" y="650" text-anchor="middle" transform="rotate(-90 357 650)">papéis backend e painel</text>
+  <path class="e sql" d="M500,760 V828" marker-end="url(#a-sql)"/>
+  <text class="lb sql" x="508" y="800">papel observador (só leitura)</text>
+  <path class="e sql" d="M805,775 V828" marker-end="url(#a-sql)"/>
+  <text class="lb sql" x="813" y="806">papel processador</text>
+</svg>
+</div>
+
+<section class="blocos">
+  <div class="bloco">
+    <h2>Uma leitura na catraca</h2>
+    <ol>
+      <li>O validador lê o QR do ingresso e fotografa o rosto no app. O app chama <code>POST /leituras</code> com o JWT.</li>
+      <li>O backend busca o rosto no Rekognition e guarda a foto no S3.</li>
+      <li>O backend publica <code>fila/{id}/leitura</code> com um <code>correlation_id</code> novo e espera até 10 s.</li>
+      <li>O processador confere no banco se quem leu é validador e se o ingresso é do dono do rosto, sem uso nem cancelamento. Grava a decisão e a mensagem de resultado na tabela <code>saida</code> na mesma transação.</li>
+      <li>O processador publica <code>fila/{id}/resultado</code> a partir da <code>saida</code> e marca <code>publicado_em</code> quando chega o PUBACK.</li>
+      <li>O backend responde ao app: aceito, recusado ou indeterminado. Se aceita, apaga a foto do S3 na hora. Recusadas e indeterminadas ficam até 1 dia, para o admin revisar. A ESP32 de sinalização pisca verde, vermelho ou amarelo e publica <code>reacao</code>.</li>
+    </ol>
+  </div>
+
+  <div class="bloco">
+    <h2>Tópicos e permissões (ACL)</h2>
+    <div class="tab"><table>
+      <thead><tr><th>Tópico</th><th>Publica</th><th>Assina</th></tr></thead>
+      <tbody>
+        <tr><td>fila/+/contagem<br>fila/+/saida<br>fila/+/heartbeat</td><td>produtor</td><td>processador, observador</td></tr>
+        <tr><td>fila/+/leitura</td><td>backend</td><td>processador, observador</td></tr>
+        <tr><td>fila/+/estado<span class="tag">retido</span></td><td>processador</td><td>consumidor, validador, observador</td></tr>
+        <tr><td>fila/+/recomendacao<span class="tag">retido</span></td><td>processador</td><td>observador</td></tr>
+        <tr><td>fila/+/resultado</td><td>processador</td><td>backend, consumidor, validador, observador</td></tr>
+        <tr><td>fila/+/reacao</td><td>consumidor</td><td>observador</td></tr>
+        <tr><td>sistema/%u/status<span class="tag">retido</span></td><td>cada usuário, só o seu</td><td>observador</td></tr>
+        <tr><td>sistema/processador/rejeitado</td><td>processador</td><td>observador</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="bloco">
+    <h2>Papéis no banco</h2>
+    <div class="tab"><table>
+      <thead><tr><th>Papel</th><th>O que pode</th></tr></thead>
+      <tbody>
+        <tr><td>processador</td><td>grava filas, movimentos, estados e saida; marca ingresso como usado; lê só id e papel dos usuários</td></tr>
+        <tr><td>backend</td><td>lê usuarios e ingressos; cria usuário sem escolher papel; cria ingresso não usado</td></tr>
+        <tr><td>painel</td><td>lê movimentos, ingressos e auditoria; muda papel; cancela ingresso; registra auditoria</td></tr>
+        <tr><td>observador</td><td>só leitura: filas, movimentos, estados, agregados por minuto e saida</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="bloco">
+    <h2>Envelope de toda mensagem</h2>
+    <p>Montado por <code>mqtt_config.evento()</code> e validado por <code>ler_evento()</code>: o <code>event_type</code> tem de ser o último nível do tópico, e o <code>filaId</code> (ou <code>source</code>) o do meio.</p>
+<pre>{
+  "event_id":       "uuid hex",
+  "correlation_id": "operação de ponta a ponta",
+  "event_type":     "leitura",
+  "source":         "backend",
+  "timestamp":      1731250000000,
+  "payload":        { "filaId": "fila-a", ... }
+}</pre>
+    <p>Mensagem fora do contrato vai para <code>sistema/processador/rejeitado</code> com o motivo.</p>
+  </div>
+
+  <div class="bloco largo">
+    <h2>Por que um banco só para todos os serviços</h2>
+    <p>Vários serviços num banco só é o anti-padrão "shared database" dos microsserviços. Ele só causa problema quando os serviços são independentes, e aqui eles não são.</p>
+    <div class="colunas">
+      <div>
+        <h3>A decisão da catraca precisa disso</h3>
+        <ul>
+          <li><code>registrar_resultado</code> (<code>estado_filas.py</code>) faz três coisas numa única transação: trava o ingresso com <code>FOR UPDATE</code> e o marca como usado, grava o movimento e grava a mensagem na <code>saida</code>.</li>
+          <li>Assim um ingresso nunca vale duas vezes e nenhum resultado decidido se perde.</li>
+          <li>Com dois bancos, isso viraria saga ou commit em duas fases.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Não são microsserviços independentes</h3>
+        <ul>
+          <li>Os três serviços em Python saem da mesma imagem, do mesmo repositório e do mesmo <code>modelos.py</code>.</li>
+          <li>Uma mudança no esquema já obriga a subir tudo junto. Na prática é um monólito modular rodando em processos separados.</li>
+          <li>As fotos ficam no S3. O banco guarda só o <code>face_id</code>.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Cada serviço tem um dono claro</h3>
+        <ul>
+          <li>Os papéis e as permissões por coluna definem quem escreve cada dado (tabela acima). O observador só lê.</li>
+          <li><code>ingressos</code> recebe escrita de três papéis, cada um nas próprias colunas.</li>
+          <li>Na corrida entre cancelar e usar, os dois lados travam a linha e conferem o estado antes de gravar. O ingresso termina usado ou cancelado, nunca os dois.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Quando separar começaria a valer</h3>
+        <ul>
+          <li>Os serviços passarem a ter deploy ou equipes diferentes.</li>
+          <li>A carga de um derrubar os outros, como consultas de histórico competindo com a catraca. O primeiro passo seria uma réplica de leitura.</li>
+          <li>Alguma exigência de compliance obrigar a isolar os dados pessoais.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Melhorias possíveis sem separar</h3>
+        <ul>
+          <li>Dois schemas no mesmo banco: <code>operacao</code> (filas, movimentos, estados, saida) e <code>acesso</code> (usuarios, ingressos, auditoria).</li>
+          <li>Limite de conexões por papel, para nenhum serviço esgotar as conexões dos outros.</li>
+          <li>Política de retenção do TimescaleDB em <code>movimentos</code> e <code>estados</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+</body></html>

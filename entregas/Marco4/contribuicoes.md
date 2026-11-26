@@ -1,0 +1,319 @@
+# Contribuições individuais
+
+## Caio Castro Miranda — 202302600
+
+Parte 3 — Gerenciamento inteligente das filas.
+
+Cálculo da ocupação e do tempo de espera, classificação do estado das filas com histerese e recomendação automática de direcionamento. A regra está em `processador/processador.py` (`espera_de`, `classificar`, `melhor_fila`, `motivo_de`, `recomendar_fila`).
+
+A ocupação de uma fila é entradas menos saídas, nunca abaixo de zero. O reconhecimento facial não altera esse saldo: quem foi recusado ou desistiu continua contado até o sensor de saída. A espera é zero com a fila vazia. Enquanto não há duas saídas na janela de 90 s, vale 7 s por pessoa, para o semáforo reagir ao crescimento antes da primeira medição de vazão. Com vazão medida, a espera é a ocupação dividida pela vazão das saídas recentes, e um intervalo só entra na média se ainda havia gente na fila. Se já houve saída no passado e a janela atual não tem nenhuma, a espera fica indeterminada e a fila conta como parada.
+
+### Histerese
+
+Os limiares são de tempo de espera, não de número de pessoas. Subir de nível usa o limite cheio. Descer exige uma margem de 7 s, para duas filas parecidas não trocarem de cor a cada evento.
+
+| Estado atual | Sobe ou permanece | Desce |
+|---|---|---|
+| livre | acima de 15 s vai a atenção; acima de 30 s vai a bloqueada; em 15 s continua livre | — |
+| atenção | acima de 30 s vai a bloqueada; em 30 s continua em atenção | em 8 s ou menos volta a livre; em 9 s permanece em atenção |
+| bloqueada | permanece bloqueada enquanto a espera estiver acima de 23 s | em 23 s volta a atenção; em 8 s ou menos volta a livre |
+
+Livre é verde (até 15 s), atenção é amarelo (entre 15 s e 30 s) e bloqueada é vermelho (acima de 30 s). Sem espera estimada, o semáforo fica como está.
+
+### Direcionamento
+
+Fila livre recomenda a si mesma. Fila em atenção ou bloqueada só desvia para outra em nível estritamente melhor, entre as que tiveram heartbeat nos últimos 15 s do relógio do processador. Entre as melhores, fica a de menor espera. Se nenhuma está melhor, o destino continua sendo a própria fila: mandar gente para uma fila tão cheia quanto a de origem não alivia o pico. Fila sem heartbeat nesse prazo deixa de ser atualizada e deixa de ser destino; a recomendação anterior permanece, e o LCD fica no último estado retido.
+
+Cada recomendação sai com o motivo em texto: a cor, a espera e a ocupação da fila de origem e, quando há desvio, as da fila de destino. O `estado` só é republicado quando muda o conjunto semáforo, ocupação, destino e espera. A `recomendacao` só sai quando muda o par semáforo e destino, com o `correlation_id` do evento que provocou o recálculo.
+
+### Teste da apresentação
+
+`tests/test_apresentacao.py` (`6124405`) sobe o processador de verdade sobre o banco `filas_teste` e troca só o Rekognition por um dobro. Com o processador no ar, a leitura do dono volta `aceito`, com nome e login, e o ingresso fica marcado. Com o processador fora, a catraca recebe HTTP 504 e o ingresso continua válido; quando a leitura atrasada é entregue e uma tentativa nova é feita, o resultado é `aceito`. O QR da apresentação não se queima enquanto o processador ainda está subindo.
+
+### O que fez o repositório rodar no Windows
+
+- No Docker Desktop o volume aparece com permissão `0777`. O Mosquitto 2.1.2 avisa e cai ao carregar senha, ACL ou certificado nesse estado. O `docker-compose.yml` (`d30178d`) copia esses arquivos para `/tmp` com `0600` e o broker sobe.
+- `.gitattributes` (`77fbaf3`) grava `*.sh`, `*.sql`, `*.acl` e o `mosquitto.conf` com fim de linha LF. Script com CRLF quebra no Alpine do Docker.
+- `produtor/.gitignore` (`d9ec393`) deixa de fora o build do PlatformIO e os arquivos locais do editor quando a pasta do firmware é aberta sozinha.
+
+### Documentação
+
+Definição do formato atual dos Markdown. O README deixa de ser um marco numerado e passa a ser o roteiro único de instalação, configuração e execução. A seção Marco 4 é só o índice: cada entrega do enunciado aponta para um arquivo, com a situação desta versão, em vez de o texto do marco crescer dentro do README. `docs/caminhos.md` (`77fbaf3`) separa os quatro caminhos de uso. O pacote do marco (`37ab434`) traz o artigo, o registro dos testes com a saída em `evidencias/`, as limitações, o uso de IA, as pendências e `gerar_pdf.py`, que só gera a versão sem capa. O PDF entregue é exportado do Word a partir de `artigo.docx`, e `artigo.md` repete esse texto.
+
+| Arquivo | O que o leitor encontra ali, e não repetido nos outros |
+|---|---|
+| `README.md` | fluxo resumido, payloads, como subir o sistema, problemas comuns e a tabela de entregas por marco |
+| `docs/ARQUITETURA.md` | diagrama, componentes, tópicos, contrato do envelope, os dois fluxos, segurança e persistência |
+| `docs/caminhos.md` | os quatro caminhos de uso: feliz, comum, ruim e não esperado |
+| `entregas/Marco4/artigo.md` | o texto do artigo, igual ao do PDF; o PDF é exportado de artigo.docx |
+| `entregas/Marco4/testes.md` | comando, módulos e o que foi observado, com a saída em `evidencias/` |
+| `entregas/Marco4/limitacoes.md` | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
+| `entregas/Marco4/uso-de-ia.md` | o que a redação destes arquivos usou de assistência |
+| `entregas/Marco4/contribuicoes.md` | esta lista |
+| `entregas/Marco4/pendencias.md` | o que o enunciado ainda pede e não está nesta versão |
+| [apresentação no Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing) | a gravação do Marco 4; o mp4 não entra no Git |
+| `mobile/README.md` | o canal do aplicativo, separado do roteiro do servidor |
+
+Principal contribuição: a regra com que o processador transforma ocupação e vazão em semáforo e em destino, com histerese na descida e desvio só para uma fila melhor; o teste em que a catraca não gasta o ingresso com o processador fora; e a organização dos Markdown para cada assunto ficar num arquivo só.
+
+## João Pedro de Brito Tomé — 202302612
+
+Arquitetura do Marco 4 de ponta a ponta: contrato das mensagens, banco, processador, backend, observabilidade, dashboard de administração, aplicativo móvel, firmware, Docker, testes e documentação.
+
+Os commits são de 06/11 a 13/11/2026; o hash de cada item está entre parênteses. Dois deles (`21124c4` e `662f6cd`) entraram pelo PR #3.
+
+### Contrato das mensagens e broker
+
+- Contrato comum de toda mensagem MQTT: `event_id`, `correlation_id`, `event_type`, `source`, `timestamp` e `payload`. `ler_evento` valida o envelope contra o tópico e descarta o que não casa (`b16f12a`).
+- Presença de cada componente por Last Will: online e offline, retidos, em `sistema/{usuario}/status` (`b16f12a`).
+- ACL separando por papel leitura, resultado, reação e rejeitadas (`b16f12a`).
+- Usuário `monitor`, só de leitura, para o MQTTX. É um usuário à parte porque o broker usa o usuário como client id: entrar como `observador` derrubaria a observabilidade. Inclui a opção `--adicionar-monitor` em `broker/configurar-seguranca.sh` (`3a827c3`).
+
+### Banco de dados (TimescaleDB)
+
+- Tabelas de usuários, ingressos e auditoria (`336d16c`).
+- Tabela `saida` como caixa de saída transacional (transactional outbox) (`336d16c`).
+- Correlação e origem em `movimentos` (`336d16c`).
+- Papéis por componente: `processador`, `backend`, `painel` e `observador` (só leitura), com permissões por coluna e scripts para atualizar um banco existente (`336d16c`).
+- `SELECT` e `INSERT` em `movimentos` para o papel `backend`, necessários no tratamento do 504 (`cf99f81`).
+
+### Processador
+
+- Decisão da leitura na catraca só pelas regras do ingresso: quem leu é validador; o ingresso é do dono do rosto e não foi usado nem cancelado. O rosto chega já reconhecido pelo backend, e o processador não usa AWS (`bd58f7a`).
+- Resultado publicado pela tabela `saida` até o broker confirmar (PUBACK). Numa queda, o pendente sai de novo com o mesmo `event_id` (`bd58f7a`).
+- Mensagens descartadas publicadas em `sistema/processador/rejeitado`, com o motivo (`bd58f7a`).
+
+### Backend (API do app e do dashboard)
+
+- API do aplicativo (`2caaa65`):
+  - cadastro com o rosto (Rekognition), com um rosto por conta;
+  - login com JWT;
+  - compra e listagem de ingressos;
+  - leitura na catraca: o backend reconhece o rosto, guarda a foto no S3, publica a leitura e espera o resultado pelo `correlation_id`.
+- Rotas `/admin`, que conferem no banco, a cada pedido, se a conta é de admin, e fazem a gestão de usuários, ingressos, auditoria e fotos (`2caaa65`).
+- Foto da leitura aceita apagada do S3 assim que o resultado chega. Recusadas e indeterminadas ficam até a regra do bucket (1 dia), para o admin revisar (`eecdd5e`).
+- Modo `BACKEND_SEM_TLS=1`, só para desenvolvimento, com aviso ao iniciar. O padrão continua HTTPS (`e1927f5`).
+- Leitura aceita devolve o nome e o login do dono do ingresso para a catraca (`2b42a6e`).
+- Aba Leituras completada com o dono do ingresso e o login do validador, lidos pelo papel `painel`. A observabilidade continua sem ler dados pessoais (`5baf61b`).
+- Correção (`cf99f81`): com o processador fora do ar, o 504 gastava o ingresso quando o processador voltava, e a nova tentativa dava `ingresso-ja-usado`. A correção:
+  - no 504, o backend grava a leitura como `indeterminado` (`sem-resposta-processador`);
+  - se o processador decidiu nesse meio-tempo, o backend devolve a decisão dele;
+  - backend e processador decidem sob a mesma trava do banco por `evento_id` (`pg_advisory_xact_lock`), e vale quem gravar primeiro;
+  - a leitura leva `validoAte`: vencida, o processador a rejeita como `leitura-expirada` sem tocar no ingresso.
+
+### Observabilidade
+
+- Processo próprio que assina tudo no broker e lê o banco como `observador`, sem gravar nada (`49092dc`).
+- API interna que o backend repassa ao dashboard. Substituiu o painel antigo do observador (`49092dc`).
+
+### Dashboard de administração (React)
+
+- Visão geral ao vivo: componentes, filas, tentativas, reações e rejeitadas (`83f34a4`).
+- Histórico, usuários, ingressos, leituras com foto, movimentos por correlação, estados e auditoria (`83f34a4`).
+- Gráficos de espera média e entradas por minuto, uma linha por fila. São SVG desenhado pelo React, sem biblioteca nova e respeitando a CSP do painel (`099a038`).
+- Catraca no computador para contas de validador: a webcam lê o QR do ingresso (BarcodeDetector, ou o código digitado) e depois o rosto. Mostra a foto capturada e os dados de quem foi liberado (`2b42a6e`).
+- Correção: o enlace do ESP32 aparecia como "Aceito" e passou a aparecer como "no ar" (`a291ae7`).
+
+### Aplicativo móvel (Expo)
+
+- App de clientes e validadores (`04f2d19`):
+  - cadastro com a foto do rosto;
+  - login;
+  - compra de ingressos e QR do ingresso;
+  - para validadores, a catraca, com leitura do QR e captura do rosto.
+
+  O app fala só com o backend.
+- Endereço padrão `http://<máquina do Expo>:8444`, para o celular na rede funcionar sem instalar a CA. `EXPO_PUBLIC_API_URL` troca o endereço (`d002c88`).
+
+### Firmware (Wokwi / ESP32)
+
+- Produtor publica os movimentos no contrato comum (`2e7d564`).
+- Consumidor executa a reação ao resultado da leitura (LED piscando e LCD) e a confirma em `fila/{id}/reacao`, sem decidir nada (`2e7d564`).
+- Sensores aceitam `chegada fila-a` e `saida fila-b` pela serial, passando pelo mesmo caminho dos sensores (buffer, TLS e QoS 1). Isso permite automatizar o teste de ponta a ponta (`1bd0a6f`).
+- Correção: consumidor com keepalive de 60 s e sessão persistente. O Wokwi lento fazia o broker derrubar a conexão a cada 15 a 40 s e perder a reação da catraca (`4be30c6`).
+
+### Infraestrutura
+
+- `docker-compose.yml` com banco, broker, processador, backend e observabilidade (`c7b0d9c`).
+- Modelo do `.env` (`f0e0709`).
+- Remoção do console de demonstração `validador/`: a catraca é o app e o dashboard (`a1cdcbd` atualizou o console para o contrato novo; `97b2301` o removeu).
+
+### Testes
+
+- `tests/e2e_completo.py`, teste de ponta a ponta (`1bd0a6f`):
+  - cria contas com rostos gerados por IA e compra ingressos;
+  - lota a fila-a até fechar e desviar para a fila-b;
+  - passa os clientes na catraca das duas filas (Rekognition, processador e reação do consumidor);
+  - repete o 504 com o processador parado e esvazia as filas.
+- Testes do 504 sem gastar o ingresso no backend e da leitura expirada no processador (`cf99f81`, em `test_backend.py` e `test_heartbeat.py`).
+
+### Documentação
+
+- README e `docs/ARQUITETURA.md` com o contrato, a outbox, a observabilidade e os papéis (`1a1baef`).
+- Situação atual da implementação, regras de segurança por componente e o motivo do banco compartilhado (`21124c4`).
+- Passo a passo para rodar localmente, com uma tabela de problemas comuns (`662f6cd`):
+  - requisitos e configuração da AWS (bucket, regra de 1 dia, coleção e perfil);
+  - segredos, Docker e contas de teste;
+  - painel e catraca no computador;
+  - app no celular, ESP32 e testes.
+- `mobile/README.md` com o modo HTTP e como voltar ao HTTPS (`d002c88`).
+
+## João Victor Braga Queiroz — 201810114
+
+Formulação do problema e projeto da solução: defini o que o sistema resolve, o
+que ele não faz, qual grandeza ele apresenta ao público e sob quais regras a
+recomendação muda. Também atuei no código e na demonstração do Marco 2, nas
+regras de contexto e tempo, na documentação das entregas e na redação do artigo.
+
+### Formulação do problema
+
+- Delimitei o problema a partir da operação real de eventos com ingresso: o
+  gargalo da entrada não é a capacidade instalada, e sim a distribuição do
+  público entre os acessos no pico. Filas desbalanceadas convivem com catracas
+  ociosas.
+- A partir dessa leitura, propus a troca de tema do grupo. O projeto anterior
+  (biblioteca inteligente com RFID) tratava identificação de objeto, não
+  distribuição de fluxo, e foi abandonado (`499bd85`, 28/08).
+- Defini o critério de sucesso do sistema em termos do usuário, não do
+  dispositivo: a pessoa não opera nada, apenas observa e decide. Esse critério é
+  o que mantém o projeto dentro da computação ubíqua e foi usado depois para
+  aceitar ou recusar funcionalidades.
+
+### Projeto da solução
+
+Cada decisão abaixo tem a alternativa que foi descartada e o motivo.
+
+- **Medir ocupação por contagem de entrada e saída**, e não por câmera top-down
+  com visão computacional. A câmera exigia um computador por catraca, sofria com
+  a variação de iluminação ao longo de um evento que atravessa o dia e a noite, e
+  não sobrevive ao custo de instalação. Dois sensores por fila entregam a mesma
+  grandeza com hardware que o evento consegue bancar.
+- **Apresentar semáforo, e não tempo em minutos.** O tempo estimado continua
+  sendo a grandeza calculada internamente, mas um número errado em público
+  destrói a confiança na recomendação e o público para de seguir o sistema. Três
+  estados toleram o erro da estimativa.
+- **Recomendar, nunca travar.** Defini como restrição de projeto que o sistema
+  não aciona nem bloqueia a catraca em nenhuma hipótese. Isso separa a decisão de
+  fluxo (do sistema) da decisão de acesso (do controle de ingresso) e evita que
+  uma falha de sensoriamento prenda alguém na entrada. A restrição atravessa
+  todos os marcos e define o que a atuação pode fazer: LED, LCD e painel.
+- **Decidir por janela deslizante com histerese**, e não pelo valor instantâneo.
+  Sem histerese, ruído de contagem faz a recomendação alternar entre filas e o
+  público deixa de acreditar nela. Derivei daí o tempo mínimo entre trocas de
+  estado.
+- **Derivei dessas escolhas o que o sistema precisa saber**: o que conta como
+  passagem válida, como a vazão é apurada, em que ritmo o estado é reavaliado e
+  qual condição muda a recomendação. Essas regras são a especificação que o
+  processador implementa até hoje.
+
+### Restrições de campo usadas como critério de escopo
+
+- Capacidade por segmento de corredor, variação de iluminação ao longo do evento
+  e comportamento do público em pico, levantados da operação real e aplicados
+  como filtro às decisões acima.
+- Descarte de sensores e arquiteturas que não se sustentariam em campo, pelo
+  mesmo filtro.
+- Separação entre fidelidade de documentação e fidelidade de protótipo: os
+  sensores reais ficam descritos como são, e os substitutos usados na simulação
+  (botão, potenciômetro, HC-SR04 no Wokwi) ficam declarados como substitutos.
+
+### Marco 2 — primeira versão executável e demonstração
+
+O Marco 2 foi a primeira versão do sistema que rodava de ponta a ponta, antes do
+backend e do banco. Atuei no produtor e no consumidor em Python e na
+demonstração que o grupo usou para explicar o projeto.
+
+- Publicação do conjunto do Marco 2 no repositório: produtor, consumidor,
+  observador, configuração do broker, README e roteiro (`77a9510`, 18/09).
+- Calibração de 7 s por pessoa a partir do tempo de passagem medido no validador
+  facial, e ciclo de chegada e saída visível na demonstração (`ce5b22b`). É o
+  `TEMPO_PASSAGEM_INICIAL` que o processador do Marco 4 ainda usa enquanto não
+  há vazão medida.
+- Validade do dado medida pelo instante do evento, e não pelo da chegada, para o
+  consumidor não decidir com dado vencido depois de uma queda do enlace
+  (`e0904c3`).
+- Picos periódicos que alternam de fila no produtor e painel de estado no
+  consumidor, para a mudança de contexto aparecer sozinha durante a demonstração
+  (`f2eef94`).
+- Generalização do produtor e do consumidor para 2, 3 ou 4 filas, com a
+  capacidade derivada por fila (`f57ce8a`), e fixação da demonstração em 2 filas
+  depois de ensaiar (`fb726e0`).
+- README e roteiro da demonstração reescritos para o domínio real: como a
+  ocupação é medida, o validador facial na saída e o semáforo que distribui o
+  pico (`ecee16f`). O congelamento do painel durante a queda do enlace ficou
+  documentado como comportamento esperado, para não parecer defeito na
+  apresentação (`316869a`).
+
+### Regras de contexto e tempo no Marco 4
+
+- As regras definidas no projeto da solução continuam valendo no sistema atual:
+  o que conta como dado válido, como a vazão é apurada, o ritmo de reavaliação
+  do estado e a condição que muda a recomendação.
+- Correção da vazão (`d0d3525`): as saídas passaram a ser marcadas pelo relógio
+  do processador, como já acontecia com o heartbeat. No Wokwi, o relógio do
+  ESP32 atrasa, e a fila aparecia parada e vermelha até esvaziar, sem histerese.
+  O mesmo commit registra o motivo em `limitacoes.md`.
+
+### Documentação e organização do repositório
+
+- Marco 1: nota de revisão da atividade 1, com a troca de tema e a simplificação
+  da camada de sensoriamento (`499bd85`, `entregas/Marco1/atividade-01.md`).
+- Organização das entregas por marco, em 19/09: pasta do Marco 1 com as
+  atividades, relatórios, firmwares e evidências dos quatro integrantes, e
+  realocação dos arquivos do Marco 2 para a pasta própria (`e3ee620`, `f43ab0b`
+  e a série de movimentações).
+- README inicial do repositório, com visão geral, integrantes, situação e
+  estrutura (`9c134f9`).
+
+### Artigo do Marco 4
+
+- Redação e fechamento do artigo em formato ABNT/UFG, junto com Caio Castro
+  Miranda.
+
+Principal contribuição: o projeto do sistema — o problema que ele resolve, a
+decisão de recomendar em vez de travar, o semáforo como linguagem, a medição por
+entrada e saída e as regras de tempo que sustentam a recomendação —, a primeira
+versão executável e a demonstração do Marco 2, a documentação que explicou o
+domínio desde o Marco 1, e o artigo que descreve tudo isso.
+
+## Jaime da Cruz — 202302611
+
+Parte 4 — Testes, segurança e confiabilidade.
+
+### Testes
+
+- Correção de `broker/testar-acl.py` (`9f29895`): o leitor e o publicador eram dois
+  clientes `produtor`, e o broker, que usa o usuário como client id, derrubava o
+  leitor, de modo que o teste passava mesmo com a ACL errada. Comprovado com a ACL
+  liberada de propósito, quando o script passou a falhar.
+- Testes unitários das funções novas, sem banco e sem broker (28 casos em
+  `tests/test_unidades_seguranca.py`), e de integração com `filas_teste` (7 casos
+  em `tests/test_seguranca.py`), validados quebrando o código de propósito
+  (`89feaa6`). A suíte foi de 84 para 119 testes.
+- Primeira execução registrada de `tests/e2e_completo.py`, com os dois
+  simuladores e a AWS: a primeira falhou no passo 7 e a segunda passou nos dez
+  passos (`evidencias/e2e-2026-11-26*.txt`, análise em `testes.md`).
+
+### Segurança
+
+- Limite de tentativas de login por login e por endereço, com HTTP 429 e
+  `Retry-After`, contado antes de conferir a senha para tentativas em paralelo
+  não passarem juntas (`b79a14e`).
+- Registro de logins recusados e bloqueados, pedidos sem login (401) e acessos
+  negados (403) na tabela `eventos_seguranca`, onde o papel `backend` só insere e
+  o `painel` só lê, sem senha nem token; mostrados na aba Auditoria do painel.
+
+### Observabilidade e confiabilidade
+
+- Conexões recusadas pelo broker (senha ou usuário inválidos e conexão sem TLS),
+  lidas do log do Mosquitto, e métricas da última hora no painel: tempo da leitura
+  até a decisão, catracas sem resposta (504) e resultados por publicar (`cd73212`).
+- Correção da vazão depois de uma queda (`5ed7b78`): as saídas guardadas pelo
+  broker chegavam juntas e zeravam a espera de uma fila cheia.
+- Keepalive de 60 s no ESP32 dos sensores (`f4e0501`) e assinatura de `estado`
+  em QoS 0 no consumidor (`df97b1c`), depois de o ponta a ponta mostrar o broker
+  acumulando estados antigos e atrasando a reação da catraca.
+
+Principal contribuição: comprovar o que o sistema garante, com testes que falham
+quando a regra quebra, a execução de ponta a ponta registrada, e o que um
+operador precisa para perceber um ataque ou uma falha no painel.

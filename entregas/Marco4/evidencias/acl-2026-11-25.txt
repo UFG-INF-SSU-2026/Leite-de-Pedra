@@ -1,0 +1,1 @@
+ACL de leitura: processador recebeu; produtor não recebeu. OK

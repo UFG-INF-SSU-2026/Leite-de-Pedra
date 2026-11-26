@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Leite de Pedra",
+    "slug": "leite-de-pedra",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.britojp.leite-de-pedra"
+    },
+    "android": {
+      "package": "com.britojp.leitedepedra",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Leite de Pedra usa a câmera para cadastrar o seu rosto, que libera a sua entrada no evento."
+        }
+      ],
+      "./plugins/ca-do-projeto"
+    ],
+    "scheme": "leitedepedra",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "33936690-b650-4fec-85b3-12ec5aa6808c"
+      }
+    },
+    "owner": "britojp"
+  }
+}
