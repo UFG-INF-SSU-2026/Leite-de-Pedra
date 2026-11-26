@@ -160,55 +160,121 @@ Os commits são de 06/11 a 13/11/2026; o hash de cada item está entre parêntes
 
 ## João Victor Braga Queiroz — 201810114
 
-Concepção do problema e da solução, requisitos, regras de contexto e tempo,
-sensoriamento e qualidade dos dados, e redação do artigo.
+Formulação do problema e projeto da solução: defini o que o sistema resolve, o
+que ele não faz, qual grandeza ele apresenta ao público e sob quais regras a
+recomendação muda. Também atuei no código e na demonstração do Marco 2, nas
+regras de contexto e tempo, na documentação das entregas e na redação do artigo.
 
-### Concepção
+### Formulação do problema
 
-- Identificação do problema a partir da operação real de eventos com ingresso: o
-  gargalo da entrada é a distribuição do público no pico, não a capacidade
-  instalada.
-- Proposta da troca de tema do grupo, que abandonou a biblioteca inteligente com
-  RFID e passou a tratar balanceamento de fluxo de fila.
-- Desenho da solução: contagem de chegada e saída por fila, tempo de espera
-  estimado como grandeza apresentada, decisão por janela deslizante com histerese
-  e semáforo como linguagem para o público.
-- Definição da restrição que atravessa o projeto: o sistema recomenda(induz), nunca
-  trava nem aciona a catraca.
+- Delimitei o problema a partir da operação real de eventos com ingresso: o
+  gargalo da entrada não é a capacidade instalada, e sim a distribuição do
+  público entre os acessos no pico. Filas desbalanceadas convivem com catracas
+  ociosas.
+- A partir dessa leitura, propus a troca de tema do grupo. O projeto anterior
+  (biblioteca inteligente com RFID) tratava identificação de objeto, não
+  distribuição de fluxo, e foi abandonado (`499bd85`, 28/08).
+- Defini o critério de sucesso do sistema em termos do usuário, não do
+  dispositivo: a pessoa não opera nada, apenas observa e decide. Esse critério é
+  o que mantém o projeto dentro da computação ubíqua e foi usado depois para
+  aceitar ou recusar funcionalidades.
 
-### Requisitos
+### Projeto da solução
 
-- Levantamento das restrições de operação real usadas como critério de escopo:
-  capacidade por segmento de corredor, variação de iluminação ao longo do evento
-  e comportamento do público em pico.
-- Descarte de sensores e arquiteturas que não se sustentariam em campo.
-- Separação entre fidelidade de documentação e de protótipo, com os substitutos
-  declarados.
+Cada decisão abaixo tem a alternativa que foi descartada e o motivo.
 
-### Sensoriamento e regras de tempo
+- **Medir ocupação por contagem de entrada e saída**, e não por câmera top-down
+  com visão computacional. A câmera exigia um computador por catraca, sofria com
+  a variação de iluminação ao longo de um evento que atravessa o dia e a noite, e
+  não sobrevive ao custo de instalação. Dois sensores por fila entregam a mesma
+  grandeza com hardware que o evento consegue bancar.
+- **Apresentar semáforo, e não tempo em minutos.** O tempo estimado continua
+  sendo a grandeza calculada internamente, mas um número errado em público
+  destrói a confiança na recomendação e o público para de seguir o sistema. Três
+  estados toleram o erro da estimativa.
+- **Recomendar, nunca travar.** Defini como restrição de projeto que o sistema
+  não aciona nem bloqueia a catraca em nenhuma hipótese. Isso separa a decisão de
+  fluxo (do sistema) da decisão de acesso (do controle de ingresso) e evita que
+  uma falha de sensoriamento prenda alguém na entrada. A restrição atravessa
+  todos os marcos e define o que a atuação pode fazer: LED, LCD e painel.
+- **Decidir por janela deslizante com histerese**, e não pelo valor instantâneo.
+  Sem histerese, ruído de contagem faz a recomendação alternar entre filas e o
+  público deixa de acreditar nela. Derivei daí o tempo mínimo entre trocas de
+  estado.
+- **Derivei dessas escolhas o que o sistema precisa saber**: o que conta como
+  passagem válida, como a vazão é apurada, em que ritmo o estado é reavaliado e
+  qual condição muda a recomendação. Essas regras são a especificação que o
+  processador implementa até hoje.
 
-- Perfil de sensoriamento e qualidade nas atividades individuais.
-- Protótipo ESP32/Wokwi usado como demonstração do Marco 1.
-- Papel de produtor no Marco 2 e roteiros das demonstrações.
-- Definição do que conta como dado válido, de como a vazão é apurada, do ritmo de
-  reavaliação do estado e das condições em que a recomendação muda.
+### Restrições de campo usadas como critério de escopo
+
+- Capacidade por segmento de corredor, variação de iluminação ao longo do evento
+  e comportamento do público em pico, levantados da operação real e aplicados
+  como filtro às decisões acima.
+- Descarte de sensores e arquiteturas que não se sustentariam em campo, pelo
+  mesmo filtro.
+- Separação entre fidelidade de documentação e fidelidade de protótipo: os
+  sensores reais ficam descritos como são, e os substitutos usados na simulação
+  (botão, potenciômetro, HC-SR04 no Wokwi) ficam declarados como substitutos.
+
+### Marco 2 — primeira versão executável e demonstração
+
+O Marco 2 foi a primeira versão do sistema que rodava de ponta a ponta, antes do
+backend e do banco. Atuei no produtor e no consumidor em Python e na
+demonstração que o grupo usou para explicar o projeto.
+
+- Publicação do conjunto do Marco 2 no repositório: produtor, consumidor,
+  observador, configuração do broker, README e roteiro (`77a9510`, 18/09).
+- Calibração de 7 s por pessoa a partir do tempo de passagem medido no validador
+  facial, e ciclo de chegada e saída visível na demonstração (`ce5b22b`). É o
+  `TEMPO_PASSAGEM_INICIAL` que o processador do Marco 4 ainda usa enquanto não
+  há vazão medida.
+- Validade do dado medida pelo instante do evento, e não pelo da chegada, para o
+  consumidor não decidir com dado vencido depois de uma queda do enlace
+  (`e0904c3`).
+- Picos periódicos que alternam de fila no produtor e painel de estado no
+  consumidor, para a mudança de contexto aparecer sozinha durante a demonstração
+  (`f2eef94`).
+- Generalização do produtor e do consumidor para 2, 3 ou 4 filas, com a
+  capacidade derivada por fila (`f57ce8a`), e fixação da demonstração em 2 filas
+  depois de ensaiar (`fb726e0`).
+- README e roteiro da demonstração reescritos para o domínio real: como a
+  ocupação é medida, o validador facial na saída e o semáforo que distribui o
+  pico (`ecee16f`). O congelamento do painel durante a queda do enlace ficou
+  documentado como comportamento esperado, para não parecer defeito na
+  apresentação (`316869a`).
+
+### Regras de contexto e tempo no Marco 4
+
+- As regras definidas no projeto da solução continuam valendo no sistema atual:
+  o que conta como dado válido, como a vazão é apurada, o ritmo de reavaliação
+  do estado e a condição que muda a recomendação.
+- Correção da vazão (`d0d3525`): as saídas passaram a ser marcadas pelo relógio
+  do processador, como já acontecia com o heartbeat. No Wokwi, o relógio do
+  ESP32 atrasa, e a fila aparecia parada e vermelha até esvaziar, sem histerese.
+  O mesmo commit registra o motivo em `limitacoes.md`.
+
+### Documentação e organização do repositório
+
+- Marco 1: nota de revisão da atividade 1, com a troca de tema e a simplificação
+  da camada de sensoriamento (`499bd85`, `entregas/Marco1/atividade-01.md`).
+- Organização das entregas por marco, em 19/09: pasta do Marco 1 com as
+  atividades, relatórios, firmwares e evidências dos quatro integrantes, e
+  realocação dos arquivos do Marco 2 para a pasta própria (`e3ee620`, `f43ab0b`
+  e a série de movimentações).
+- README inicial do repositório, com visão geral, integrantes, situação e
+  estrutura (`9c134f9`).
 
 ### Artigo do Marco 4
 
-- Redação e fechamento do artigo em formato ABNT/UFG, junto à Caio Miranda.
+- Redação e fechamento do artigo em formato ABNT/UFG, junto com Caio Castro
+  Miranda.
 
-### Atuação no repositório
-
-- Commits de regra de contexto e tempo no Marco 2 (18/09), organização das
-  entregas por marco e README inicial do projeto (19 a 21/09).
-- Correção da vazão no processador no Marco 4 (`d0d3525`), que fazia as filas
-  aparecerem travadas durante a demonstração.
-
-Principal contribuição: a concepção do sistema e as regras que o sustentam — o
-problema, a solução, o que conta como dado válido, como a espera é estimada e
-quando a recomendação muda — além do artigo que descreve tudo isso.
-
-### Ainda não commitado
+Principal contribuição: o projeto do sistema — o problema que ele resolve, a
+decisão de recomendar em vez de travar, o semáforo como linguagem, a medição por
+entrada e saída e as regras de tempo que sustentam a recomendação —, a primeira
+versão executável e a demonstração do Marco 2, a documentação que explicou o
+domínio desde o Marco 1, e o artigo que descreve tudo isso.
 
 ## Jaime da Cruz — 202302611
 
