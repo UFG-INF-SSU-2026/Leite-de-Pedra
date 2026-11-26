@@ -211,3 +211,45 @@ quando a recomendação muda — além do artigo que descreve tudo isso.
 - Testes unitários sem banco e sem broker, 75 casos, cobrindo as funções de `senhas`, `mqtt_config`, `modelos`, `estado_filas`, backend, observabilidade e processador: `tests/test_unidades.py` e `tests/test_unidades_processador.py`.
 
 ### Ainda não commitado
+
+## Jaime da Cruz — 202302611
+
+Parte 4 — Testes, segurança e confiabilidade.
+
+### Testes
+
+- Correção de `broker/testar-acl.py` (`9f29895`): o leitor e o publicador eram dois
+  clientes `produtor`, e o broker, que usa o usuário como client id, derrubava o
+  leitor, de modo que o teste passava mesmo com a ACL errada. Comprovado com a ACL
+  liberada de propósito, quando o script passou a falhar.
+- Testes unitários das funções novas, sem banco e sem broker (28 casos em
+  `tests/test_unidades_seguranca.py`), e de integração com `filas_teste` (7 casos
+  em `tests/test_seguranca.py`), validados quebrando o código de propósito
+  (`89feaa6`). A suíte foi de 84 para 119 testes.
+- Primeira execução registrada de `tests/e2e_completo.py`, com os dois
+  simuladores e a AWS: a primeira falhou no passo 7 e a segunda passou nos dez
+  passos (`evidencias/e2e-2026-11-26*.txt`, análise em `testes.md`).
+
+### Segurança
+
+- Limite de tentativas de login por login e por endereço, com HTTP 429 e
+  `Retry-After`, contado antes de conferir a senha para tentativas em paralelo
+  não passarem juntas (`b79a14e`).
+- Registro de logins recusados e bloqueados, pedidos sem login (401) e acessos
+  negados (403) na tabela `eventos_seguranca`, onde o papel `backend` só insere e
+  o `painel` só lê, sem senha nem token; mostrados na aba Auditoria do painel.
+
+### Observabilidade e confiabilidade
+
+- Conexões recusadas pelo broker (senha ou usuário inválidos e conexão sem TLS),
+  lidas do log do Mosquitto, e métricas da última hora no painel: tempo da leitura
+  até a decisão, catracas sem resposta (504) e resultados por publicar (`cd73212`).
+- Correção da vazão depois de uma queda (`5ed7b78`): as saídas guardadas pelo
+  broker chegavam juntas e zeravam a espera de uma fila cheia.
+- Keepalive de 60 s no ESP32 dos sensores (`f4e0501`) e assinatura de `estado`
+  em QoS 0 no consumidor (`df97b1c`), depois de o ponta a ponta mostrar o broker
+  acumulando estados antigos e atrasando a reação da catraca.
+
+Principal contribuição: comprovar o que o sistema garante, com testes que falham
+quando a regra quebra, a execução de ponta a ponta registrada, e o que um
+operador precisa para perceber um ataque ou uma falha no painel.
