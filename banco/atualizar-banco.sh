@@ -25,6 +25,7 @@ SQL
 
 for banco in filas filas_teste; do
     psql_como_postgres -d "$banco" < "$RAIZ_PROJETO/banco/ingressos.sql"
+    psql_como_postgres -d "$banco" < "$RAIZ_PROJETO/banco/seguranca.sql"
 done
 
 # O pg_hba.conf passou a aceitar backend e painel; reinicia para recarregá-lo.

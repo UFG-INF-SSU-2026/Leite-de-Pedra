@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AoVivo, MinutoHistorico, Resumo } from '../api'
+import type { AoVivo, Metricas, MinutoHistorico, Resumo } from '../api'
 import { Chip, Erro, Id, Tabela } from '../componentes'
 import { hora, useDados } from '../dados'
 
@@ -11,6 +11,11 @@ function Numero({ rotulo, valor, detalhe }: { rotulo: string; valor: number; det
       {detalhe && <span className="detalhe">{detalhe}</span>}
     </div>
   )
+}
+
+const MOTIVOS_BROKER: Record<string, string> = {
+  'credencial-recusada': 'usuário ou senha recusados',
+  'sem-tls-ou-protocolo': 'sem TLS ou fora do protocolo',
 }
 
 const LARGURA = 640, ALTURA = 170, MARGEM = { esq: 40, dir: 12, topo: 10, base: 24 }
@@ -80,7 +85,10 @@ export function VisaoGeral() {
   const agora = useDados<AoVivo>('/admin/ao-vivo', 2000)
   const [minutos, setMinutos] = useState('60')
   const historico = useDados<MinutoHistorico[]>(`/admin/historico?minutos=${minutos}`, 30000)
+  const metricas = useDados<Metricas>('/admin/metricas?minutos=60', 10000)
   const r = resumo.dados
+  const m = metricas.dados
+  const recusas = agora.dados?.recusasBroker
 
   return (
     <>
@@ -99,6 +107,26 @@ export function VisaoGeral() {
         </section>
       )}
 
+      <h2>Métricas da última hora</h2>
+      <Erro mensagem={metricas.erro} />
+      {m && (
+        <section className="numeros">
+          <Numero rotulo="Leitura até a decisão (mediana)" valor={m.leituraAteDecisao.p50Ms ?? 0}
+            detalhe={m.leituraAteDecisao.quantidade
+              ? `ms · p95 ${m.leituraAteDecisao.p95Ms} ms · máx. ${m.leituraAteDecisao.maximoMs} ms · ${m.leituraAteDecisao.quantidade} leitura(s)`
+              : 'nenhuma leitura decidida na última hora'} />
+          <Numero rotulo="Catraca sem resposta (504)" valor={m.semResposta.noPeriodo}
+            detalhe={`${m.semResposta.total} desde o início`} />
+          <Numero rotulo="Resultados a publicar" valor={m.saidaPendente.quantidade}
+            detalhe={m.saidaPendente.maisAntigaSegundos != null
+              ? `o mais antigo espera há ${m.saidaPendente.maisAntigaSegundos} s` : 'nada esperando o broker'} />
+          {recusas && <Numero rotulo="Conexões recusadas pelo broker" valor={recusas.total}
+            detalhe={recusas.logDisponivel
+              ? Object.entries(recusas.porMotivo).map(([motivo, n]) => `${MOTIVOS_BROKER[motivo] ?? motivo}: ${n}`).join(' · ') || 'nenhuma'
+              : 'log do broker indisponível'} />}
+        </section>
+      )}
+
       <h2>Componentes</h2>
       <div className="filtros">
         {agora.dados?.componentes.map(c => (
@@ -113,6 +141,18 @@ export function VisaoGeral() {
         <p className="nota">Rejeitadas pelo processador: {Object.entries(agora.dados.rejeitadas)
           .map(([motivo, n]) => `${motivo} ${n}`).join(' · ')}</p>
       )}
+
+      <h2>Conexões recusadas pelo broker</h2>
+      <p className="nota">Do log do Mosquitto: usuário inexistente, senha errada ou conexão sem TLS.
+        Publicação ou assinatura negada pela ACL não aparece aqui.</p>
+      <Tabela cabecalho={['Momento', 'Motivo', 'Usuário tentado', 'Endereço']} vazio={!recusas?.recentes.length}>
+        {recusas?.recentes.map((x, i) => (
+          <tr key={x.momento + x.endereco + i}>
+            <td>{hora(x.momento)}</td><td>{MOTIVOS_BROKER[x.motivo] ?? x.motivo}</td>
+            <td>{x.usuario ?? '–'}</td><td><code>{x.endereco}</code></td>
+          </tr>
+        ))}
+      </Tabela>
 
       <h2>Filas agora {agora.dados && !agora.dados.brokerConectado && <span className="chip chip-recusado">broker desconectado</span>}</h2>
       <div className="cartoes">

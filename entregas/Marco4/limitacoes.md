@@ -22,7 +22,7 @@ Não houve ensaio de invasão além do firmware intruso (senha inválida recusad
 
 Sem heartbeat recebido em 15 s, a fila deixa de ser atualizada e deixa de ser destino; o consumidor permanece no último estado retido. Se o aplicativo não alcança o backend, a interface mostra falta de conexão e não troca para a tela de sucesso. Se o backend está no broker e o processador não responde em 10 s, a catraca recebe HTTP 504, o ingresso não é marcado como usado e a leitura atrasada expira. Se o próprio backend perde o broker, a resposta é 503 e nada é publicado.
 
-Não foi medido o comportamento numa rede com perda, atraso ou partição controlados. O ensaio `tests/e2e_completo.py`, que percorre esse 504 com os simuladores no ar, não faz parte da execução registrada em `evidencias/`.
+Não foi medido o comportamento numa rede com perda, atraso ou partição controlados. O ensaio `tests/e2e_completo.py` percorre esse 504 com os simuladores no ar e passou em 26/11 (`evidencias/e2e-2026-11-26-execucao2.txt`). A execução anterior do mesmo dia falhou porque o broker tinha guardado estados antigos para o consumidor enquanto ele estava desligado; ver `testes.md`.
 
 ## Desempenho
 

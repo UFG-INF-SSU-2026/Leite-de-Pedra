@@ -56,6 +56,9 @@ VALIDADE_DADOS_SEGUNDOS = 15
 # espera parecer maior do que é.
 JANELA_VAZAO = timedelta(seconds=90)
 TEMPO_PASSAGEM_INICIAL = 7  # estimativa até o sensor de saída registrar duas passagens
+# Saídas recebidas mais juntas que isto não são atendimentos: são as que o broker
+# guardou (ou o ESP32 reteve) durante uma queda e entregou de uma vez.
+INTERVALO_MINIMO_ATENDIMENTO = 1.0  # segundos
 
 NIVEL = {"livre": 0, "atencao": 1, "bloqueada": 2}
 ROTULOS = {"livre": "VERDE", "atencao": "AMARELO", "bloqueada": "VERMELHO"}
@@ -276,7 +279,8 @@ def vazao_de(fila, agora):
     atendimentos = [
         (depois[0] - antes[0]).total_seconds()
         for antes, depois in zip(recentes, recentes[1:])
-        if antes[1] > 0 and depois[0] > antes[0]
+        if antes[1] > 0
+        and (depois[0] - antes[0]).total_seconds() >= INTERVALO_MINIMO_ATENDIMENTO
     ]
     if not atendimentos:
         return 0

@@ -14,7 +14,7 @@ from fastapi import FastAPI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from . import ao_vivo, historico  # noqa: E402
+from . import ao_vivo, historico, recusas_broker  # noqa: E402
 
 TOPICOS = [(f"fila/+/{tipo}", 1) for tipo in ao_vivo.TOPICOS] + [
     ("sistema/+/status", 1), ("sistema/+/rejeitado", 1)]
@@ -43,4 +43,5 @@ app.include_router(historico.rotas)
 
 @app.get("/ao-vivo")
 def agora():
-    return ao_vivo.situacao_atual(cliente_mqtt.is_connected())
+    return {**ao_vivo.situacao_atual(cliente_mqtt.is_connected()),
+            "recusasBroker": recusas_broker.situacao()}

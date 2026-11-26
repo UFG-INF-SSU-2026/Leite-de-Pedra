@@ -1,0 +1,2 @@
+# 26/11/2026 01:03:37 | .venv/bin/python broker/testar-acl.py
+ACL de leitura: observador recebeu; produtor não recebeu. OK

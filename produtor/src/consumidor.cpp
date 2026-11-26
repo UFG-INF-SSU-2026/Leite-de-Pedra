@@ -174,7 +174,10 @@ void conectarMqtt() {
   if (mqtt.connect("wokwi-consumidor", USUARIO, MQTT_SENHA)) {
     Serial.println("MQTT/TLS autenticado como consumidor");
     mqtt.publish(TOPICO_STATUS, status(true), true, 1);
-    mqtt.subscribe("fila/+/estado", 1);
+    // Estado em QoS 0: é retido, então chega na reconexão, e o broker não guarda
+    // para nós cada mudança antiga enquanto estamos fora (uma fila delas atrasava
+    // a reação). Resultado em QoS 1, com a sessão persistente: a catraca espera por ele.
+    mqtt.subscribe("fila/+/estado", 0);
     mqtt.subscribe("fila/+/resultado", 1);
     estavaConectado = true;
     atualizarDisplay();
@@ -202,7 +205,7 @@ void setup() {
   // Este ESP32 só recebe: fica conectado pelo PING do keepalive. Com 10 s (o
   // padrão), o Wokwi lento atrasa o PING e o broker derruba a conexão. A sessão
   // persistente faz o broker guardar os resultados (QoS 1) de uma queda curta,
-  // em vez de perder a reação da catraca.
+  // em vez de perder a reação da catraca; o estado é assinado em QoS 0 (conectarMqtt).
   mqtt.setKeepAlive(60);
   mqtt.setCleanSession(false);
   mqtt.onMessage(receber);
@@ -213,6 +216,8 @@ void setup() {
 void loop() {
   mqtt.loop();
   if (!mqtt.connected() && estavaConectado) {
+    // Código da biblioteca (lwmqtt): -4 tempo esgotado, -5 falha de leitura, -13 sem PINGRESP.
+    Serial.printf("Conexão MQTT caiu: erro %d\n", mqtt.lastError());
     estavaConectado = false;
     for (FilaSinalizada &fila : filas) fila.estado = -1;
     atualizarDisplay();
