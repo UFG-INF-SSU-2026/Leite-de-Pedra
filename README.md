@@ -1,6 +1,6 @@
 # Grupo Leite de Pedra: Caio Castro Miranda, João Pedro de Brito Tomé, João Victor Braga e Jaime da Cruz
 
-# Marco 3 — balanceamento seguro de filas de entrada
+Balanceamento seguro de filas de entrada
 
 O sistema conta quem entra e quem sai de cada fila de entrada de um evento,
 estima o tempo de espera e sinaliza num semáforo (verde, amarelo, vermelho)
