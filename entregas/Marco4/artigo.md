@@ -105,7 +105,7 @@ Cada módulo abaixo está ligado ao requisito que as asserções exercitam. A sa
 | `broker/testar-acl.py` | Autorização no canal | Leitor autorizado recebe; produtor não lê o tópico de telemetria. Exige o broker. |
 | `tests/e2e_completo.py` | Fluxo com os dois simuladores | Roteiro manual automatizado, fora da suíte `discover` e fora desta execução. |
 
-Verificações manuais de interface, do vídeo e do APK não fazem parte deste registro.
+Verificações manuais de interface e do APK não fazem parte deste registro. A apresentação gravada está em https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing.
 
 ## 6. Resultados e discussão
 
@@ -129,7 +129,7 @@ O que essa suíte não mostra é tão objetivo quanto o que ela mostra. Ela não
 
 O Leite de Pedra separa contar pessoas de autorizar a passagem. Dois produtores alimentam um processador, que responde com semáforo e com o resultado do ingresso. A espera, e não o comprimento da fila, é o contexto que muda a recomendação, com histerese para não oscilar. O banco temporal guarda o saldo e o histórico depois que o processo que calculou termina. Identidade, permissão e canal cifrado estão no broker, no banco e no HTTPS do aplicativo, desde que a demonstração não use o atalho sem TLS.
 
-A evidência automatizada disponível cobre contrato, persistência, regras com estado e prazo, autorização das APIs e a falha em que o processador não responde. Não cobre o pacote Android, o vídeo, o ensaio completo com os dois simuladores e as grandezas de desempenho e energia. Essas pendências determinam o que ainda falta para a versão que será apresentada, e estão listadas fora do artigo para não serem confundidas com resultado medido.
+A evidência automatizada disponível cobre contrato, persistência, regras com estado e prazo, autorização das APIs e a falha em que o processador não responde. Não cobre o pacote Android, o ensaio completo com os dois simuladores e as grandezas de desempenho e energia. A apresentação gravada está em https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing. O que a suíte não mede continua listado fora do artigo, para não ser confundido com resultado medido.
 
 ## Referências
 

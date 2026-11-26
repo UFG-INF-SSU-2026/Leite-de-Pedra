@@ -1,22 +1,60 @@
 # Contribuições individuais
 
-As contribuições dos demais integrantes ainda não estão neste arquivo.
-
 ## Caio Castro Miranda — 202302600
 
 Parte 3 — Gerenciamento inteligente das filas.
 
-Cálculo da ocupação e do tempo de espera, classificação do estado das filas e recomendação automática de direcionamento.
+Cálculo da ocupação e do tempo de espera, classificação do estado das filas com histerese e recomendação automática de direcionamento. A regra está em `processador/processador.py` (`espera_de`, `classificar`, `melhor_fila`, `motivo_de`, `recomendar_fila`).
 
-O que mudou no Marco 4:
+A ocupação de uma fila é entradas menos saídas, nunca abaixo de zero. O reconhecimento facial não altera esse saldo: quem foi recusado ou desistiu continua contado até o sensor de saída. A espera é zero com a fila vazia. Enquanto não há duas saídas na janela de 90 s, vale 7 s por pessoa, para o semáforo reagir ao crescimento antes da primeira medição de vazão. Com vazão medida, a espera é a ocupação dividida pela vazão das saídas recentes, e um intervalo só entra na média se ainda havia gente na fila. Se já houve saída no passado e a janela atual não tem nenhuma, a espera fica indeterminada e a fila conta como parada.
 
-- Criação do endpoint `GET /filas` no backend.
-- Nova lógica para escolher a melhor fila entre aquelas com enlace ativo, priorizando o melhor semáforo e, em caso de empate, o menor tempo de espera.
-- Integração com o aplicativo: a tela do ingresso atualiza a recomendação a cada 3 segundos.
-- Exibição da ocupação, do semáforo e do tempo estimado de espera de cada fila.
-- Criação do teste `demo_lotacao.py` para demonstrar a mudança de recomendação em tempo real.
+### Histerese
 
-Principal contribuição: levar o gerenciamento das filas para o usuário, permitindo que ele saiba diretamente pelo celular qual fila deve escolher.
+Os limiares são de tempo de espera, não de número de pessoas. Subir de nível usa o limite cheio. Descer exige uma margem de 7 s, para duas filas parecidas não trocarem de cor a cada evento.
+
+| Estado atual | Sobe ou permanece | Desce |
+|---|---|---|
+| livre | acima de 15 s vai a atenção; acima de 30 s vai a bloqueada; em 15 s continua livre | — |
+| atenção | acima de 30 s vai a bloqueada; em 30 s continua em atenção | em 8 s ou menos volta a livre; em 9 s permanece em atenção |
+| bloqueada | permanece bloqueada enquanto a espera estiver acima de 23 s | em 23 s volta a atenção; em 8 s ou menos volta a livre |
+
+Livre é verde (até 15 s), atenção é amarelo (entre 15 s e 30 s) e bloqueada é vermelho (acima de 30 s). Sem espera estimada, o semáforo fica como está.
+
+### Direcionamento
+
+Fila livre recomenda a si mesma. Fila em atenção ou bloqueada só desvia para outra em nível estritamente melhor, entre as que tiveram heartbeat nos últimos 15 s do relógio do processador. Entre as melhores, fica a de menor espera. Se nenhuma está melhor, o destino continua sendo a própria fila: mandar gente para uma fila tão cheia quanto a de origem não alivia o pico. Fila sem heartbeat nesse prazo deixa de ser atualizada e deixa de ser destino; a recomendação anterior permanece, e o LCD fica no último estado retido.
+
+Cada recomendação sai com o motivo em texto: a cor, a espera e a ocupação da fila de origem e, quando há desvio, as da fila de destino. O `estado` só é republicado quando muda o conjunto semáforo, ocupação, destino e espera. A `recomendacao` só sai quando muda o par semáforo e destino, com o `correlation_id` do evento que provocou o recálculo.
+
+### Teste da apresentação
+
+`tests/test_apresentacao.py` (`6124405`) sobe o processador de verdade sobre o banco `filas_teste` e troca só o Rekognition por um dobro. Com o processador no ar, a leitura do dono volta `aceito`, com nome e login, e o ingresso fica marcado. Com o processador fora, a catraca recebe HTTP 504 e o ingresso continua válido; quando a leitura atrasada é entregue e uma tentativa nova é feita, o resultado é `aceito`. O QR da apresentação não se queima enquanto o processador ainda está subindo.
+
+### O que fez o repositório rodar no Windows
+
+- No Docker Desktop o volume aparece com permissão `0777`. O Mosquitto 2.1.2 avisa e cai ao carregar senha, ACL ou certificado nesse estado. O `docker-compose.yml` (`d30178d`) copia esses arquivos para `/tmp` com `0600` e o broker sobe.
+- `.gitattributes` (`77fbaf3`) grava `*.sh`, `*.sql`, `*.acl` e o `mosquitto.conf` com fim de linha LF. Script com CRLF quebra no Alpine do Docker.
+- `produtor/.gitignore` (`d9ec393`) deixa de fora o build do PlatformIO e os arquivos locais do editor quando a pasta do firmware é aberta sozinha.
+
+### Documentação
+
+Definição do formato atual dos Markdown. O README deixa de ser um marco numerado e passa a ser o roteiro único de instalação, configuração e execução. A seção Marco 4 é só o índice: cada entrega do enunciado aponta para um arquivo, com a situação desta versão, em vez de o texto do marco crescer dentro do README. `docs/caminhos.md` (`77fbaf3`) separa os quatro caminhos de uso. O pacote do marco (`37ab434`) traz o artigo, o registro dos testes com a saída em `evidencias/`, as limitações, o uso de IA, as pendências e `gerar_pdf.py`.
+
+| Arquivo | O que o leitor encontra ali, e não repetido nos outros |
+|---|---|
+| `README.md` | fluxo resumido, payloads, como subir o sistema, problemas comuns e a tabela de entregas por marco |
+| `docs/ARQUITETURA.md` | diagrama, componentes, tópicos, contrato do envelope, os dois fluxos, segurança e persistência |
+| `docs/caminhos.md` | os quatro caminhos de uso: feliz, comum, ruim e não esperado |
+| `entregas/Marco4/artigo.md` | o texto do artigo; o PDF é gerado dele |
+| `entregas/Marco4/testes.md` | comando, módulos e o que foi observado, com a saída em `evidencias/` |
+| `entregas/Marco4/limitacoes.md` | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
+| `entregas/Marco4/uso-de-ia.md` | o que a redação destes arquivos usou de assistência |
+| `entregas/Marco4/contribuicoes.md` | esta lista |
+| `entregas/Marco4/pendencias.md` | o que o enunciado ainda pede e não está nesta versão |
+| [apresentação no Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing) | a gravação do Marco 4; o mp4 não entra no Git |
+| `mobile/README.md` | o canal do aplicativo, separado do roteiro do servidor |
+
+Principal contribuição: a regra com que o processador transforma ocupação e vazão em semáforo e em destino, com histerese na descida e desvio só para uma fila melhor; o teste em que a catraca não gasta o ingresso com o processador fora; e a organização dos Markdown para cada assunto ficar num arquivo só.
 
 ## João Pedro de Brito Tomé — 202302612
 
