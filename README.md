@@ -19,7 +19,7 @@ Os artefatos deste marco ficam em [`entregas/Marco4/`](entregas/Marco4/). Este R
 | Contratos | [payloads](#payloads) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#contrato-das-mensagens) | envelope, tópicos e validação |
 | Verificação do enunciado | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md#verificação-pedida-no-enunciado) | passos, esperado, observado e evidência das quatro verificações |
 | Testes e resultados | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md) | comando, módulos e saídas em `entregas/Marco4/evidencias/` |
-| Artigo | [`entregas/Marco4/artigo.pdf`](entregas/Marco4/artigo.pdf) | texto no repositório; o grupo ainda precisa revisar |
+| Artigo | [`entregas/Marco4/artigo.pdf`](entregas/Marco4/artigo.pdf) | versão ABNT revisada em 26/11, exportada pelo Word de `artigo.docx`; o mesmo texto em `artigo.md` |
 | Implantação | este arquivo e [`mobile/README.md`](mobile/README.md) | ordem de subida, credenciais de teste e canal HTTPS do app |
 | Limitações | [`entregas/Marco4/limitacoes.md`](entregas/Marco4/limitacoes.md) | simulação, dados pessoais, segurança, conectividade, desempenho e energia |
 | Uso de IA na redação destes arquivos | [`entregas/Marco4/uso-de-ia.md`](entregas/Marco4/uso-de-ia.md) | rascunho assistido; a validação é do grupo |

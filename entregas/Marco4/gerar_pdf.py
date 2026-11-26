@@ -1,6 +1,11 @@
-"""Gera artigo.pdf a partir de artigo.md. Requer reportlab e as fontes Times do Windows.
+"""Gera um PDF simples, sem capa, a partir de artigo.md. Requer reportlab e as fontes Times do Windows.
 
     python entregas/Marco4/gerar_pdf.py
+
+Desde 26/11/2026 o artigo oficial é artigo.pdf, exportado pelo Word a partir de artigo.docx,
+com a capa ABNT e o logo da UFG. Este script não monta essa capa; por isso grava em
+artigo-sem-capa.pdf e não sobrescreve o artigo.pdf. Para mudar o texto do artigo, edite
+artigo.docx, exporte o PDF pelo Word e atualize artigo.md com o mesmo texto.
 """
 
 import re
@@ -26,7 +31,7 @@ from reportlab.lib import colors
 
 RAIZ = Path(__file__).resolve().parent
 ORIGEM = RAIZ / "artigo.md"
-DESTINO = RAIZ / "artigo.pdf"
+DESTINO = RAIZ / "artigo-sem-capa.pdf"
 FONTES = Path(r"C:\Windows\Fonts")
 
 pdfmetrics.registerFont(TTFont("Times", str(FONTES / "times.ttf")))
