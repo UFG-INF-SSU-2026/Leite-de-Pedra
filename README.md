@@ -577,6 +577,22 @@ no mesmo volume `banco_dados` de antes, e a persistência do broker em
 Ficam fora do Docker: os ESP32 no Wokwi (alcançam o broker em
 `host.wokwi.internal:8883`, a porta publicada) e o app em `mobile/` (Expo).
 
+**Atualizar uma instalação que já roda** (depois de um `git pull`). O volume do
+banco e o `.local/` continuam; só o que mudou é refeito:
+
+```
+./banco/adicionar-seguranca.sh     # uma vez: tabela dos acessos recusados (idempotente)
+docker compose up -d --build       # backend (com o dashboard), observabilidade e processador
+docker compose restart broker      # relê broker/mosquitto.conf e a ACL
+cd produtor && pio run             # firmwares; depois reinicie as simulações no VS Code
+```
+
+O `up -d --build` só recria os contêineres cuja imagem mudou. O broker precisa
+do `restart` porque a configuração é montada do host e não entra na imagem: sem
+ele, o painel mostra "log do broker indisponível" nas conexões recusadas. Os
+ESP32 só pegam um firmware novo quando a simulação é reiniciada. O app em
+`mobile/` só precisa de um build novo se algo em `mobile/` mudar.
+
 ### Execução sem Docker
 
 Para a demonstração integrada, suba o banco uma vez e use três terminais na
