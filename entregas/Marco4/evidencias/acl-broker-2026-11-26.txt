@@ -1,0 +1,10 @@
+1795665817: Client observador [172.20.0.6:56851] disconnected: session taken over.
+1795665817: New client connected from 172.20.0.1:51712 as observador (p4, c1, k60, u'observador').
+1795665817: Client observador negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384
+1795665817: Client produtor [172.20.0.1:35268] disconnected: session taken over.
+1795665817: New client connected from 172.20.0.1:51728 as produtor (p4, c1, k60, u'produtor').
+1795665817: Client produtor negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384
+1795665817: Client observador [172.20.0.1:51712] disconnected.
+1795665817: Client produtor [172.20.0.1:51728] disconnected.
+1795665818: New client connected from 172.20.0.6:47197 as observador (p4, c1, k60, u'observador').
+1795665818: Client observador negotiated TLSv1.3 cipher TLS_AES_256_GCM_SHA384

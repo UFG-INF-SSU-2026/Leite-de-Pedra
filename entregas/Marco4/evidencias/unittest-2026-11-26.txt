@@ -1,0 +1,178 @@
+# 26/11/2026 01:03:24 | 89feaa6 feat/marco4-seguranca-observabilidade | Linux, Python 3.13.5, TimescaleDB 2.17.2 em 127.0.0.1:5433
+# PYTHONWARNINGS=ignore .venv/bin/python -m unittest discover -s tests -v
+test_dashboard (test_admin.AdminTest.test_dashboard) ... Exception in thread paho-mqtt-client-:
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/threading.py", line 1043, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/lib/python3.13/threading.py", line 994, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/.venv/lib/python3.13/site-packages/paho/mqtt/client.py", line 4523, in _thread_main
+    self.loop_forever(retry_first_connection=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/.venv/lib/python3.13/site-packages/paho/mqtt/client.py", line 2324, in loop_forever
+    self.reconnect()
+    ~~~~~~~~~~~~~~^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/.venv/lib/python3.13/site-packages/paho/mqtt/client.py", line 1550, in reconnect
+    raise ValueError('Invalid host.')
+ValueError: Invalid host.
+ok
+test_processador_fora_nao_gasta_o_ingresso (test_apresentacao.ApresentacaoTest.test_processador_fora_nao_gasta_o_ingresso)
+Na apresentação o processador ainda está subindo. A catraca não pode queimar o QR. ... ok
+test_processador_no_ar_libera_o_dono (test_apresentacao.ApresentacaoTest.test_processador_no_ar_libera_o_dono) ... ok
+test_fila_recomendada_para_quem_chega (test_backend.BackendTest.test_fila_recomendada_para_quem_chega) ... ok
+test_fluxo_do_app (test_backend.BackendTest.test_fluxo_do_app) ... ok
+test_aceita_so_mensagem_do_contrato_que_combina_com_o_topico (test_contrato.ContratoTest.test_aceita_so_mensagem_do_contrato_que_combina_com_o_topico) ... ok
+test_persiste_e_deduplica_movimentos (test_estado_filas.EstadoFilasTest.test_persiste_e_deduplica_movimentos) ... ok
+test_horario_antigo_do_esp_nao_bloqueia_estado (test_heartbeat.HeartbeatTest.test_horario_antigo_do_esp_nao_bloqueia_estado) ... ok
+test_janela_deslizante_e_reserva_tudo_ou_nada (test_seguranca.LimitadorTest.test_janela_deslizante_e_reserva_tudo_ou_nada) ... ok
+test_limite_de_tentativas_e_registro_das_recusas (test_seguranca.LoginTest.test_limite_de_tentativas_e_registro_das_recusas) ... ok
+test_registro_tem_limite_por_minuto (test_seguranca.LoginTest.test_registro_tem_limite_por_minuto) ... ok
+test_tentativas_em_paralelo_nao_passam_do_limite (test_seguranca.LoginTest.test_tentativas_em_paralelo_nao_passam_do_limite) ... ok
+test_leitura_ate_decisao_504_e_saida_pendente (test_seguranca.MetricasTest.test_leitura_ate_decisao_504_e_saida_pendente) ... ok
+test_acompanha_o_arquivo_crescendo_e_truncado (test_seguranca.RecusasBrokerTest.test_acompanha_o_arquivo_crescendo_e_truncado) ... ok
+test_interpreta_so_as_recusas (test_seguranca.RecusasBrokerTest.test_interpreta_so_as_recusas) ... ok
+test_auditar (test_unidades.AdminUnidadeTest.test_auditar) ... ok
+test_da_observabilidade (test_unidades.AdminUnidadeTest.test_da_observabilidade) ... ok
+test_ingresso_json (test_unidades.AdminUnidadeTest.test_ingresso_json) ... ok
+test_pagina (test_unidades.AdminUnidadeTest.test_pagina) ... ok
+test_repassar (test_unidades.AdminUnidadeTest.test_repassar) ... ok
+test_usuario_json (test_unidades.AdminUnidadeTest.test_usuario_json) ... ok
+test_agora_local (test_unidades.AoVivoTest.test_agora_local) ... ok
+test_registrar_mensagem_descarta (test_unidades.AoVivoTest.test_registrar_mensagem_descarta) ... ok
+test_registrar_mensagem_fila (test_unidades.AoVivoTest.test_registrar_mensagem_fila) ... ok
+test_registrar_mensagem_sistema (test_unidades.AoVivoTest.test_registrar_mensagem_sistema) ... ok
+test_situacao_atual (test_unidades.AoVivoTest.test_situacao_atual) ... ok
+test_situacao_vazia (test_unidades.AoVivoTest.test_situacao_vazia) ... ok
+test_apagar_foto (test_unidades.AppTest.test_apagar_foto) ... ok
+test_decodificar_foto (test_unidades.AppTest.test_decodificar_foto) ... ok
+test_encerrar_sem_resposta (test_unidades.AppTest.test_encerrar_sem_resposta) ... ok
+test_filas_agora (test_unidades.AppTest.test_filas_agora) ... ok
+test_raiz_e_middleware (test_unidades.AppTest.test_raiz_e_middleware) ... ok
+test_reconhecer (test_unidades.AppTest.test_reconhecer) ... ok
+test_emitir_token (test_unidades.AutenticacaoTest.test_emitir_token) ... ok
+test_ler_chave_jwt (test_unidades.AutenticacaoTest.test_ler_chave_jwt) ... ok
+test_sessao (test_unidades.AutenticacaoTest.test_sessao) ... ok
+test_sessao_de_admin (test_unidades.AutenticacaoTest.test_sessao_de_admin) ... ok
+test_sessao_de_validador (test_unidades.AutenticacaoTest.test_sessao_de_validador) ... ok
+test_na_saida (test_unidades.EstadoFilasUnidadeTest.test_na_saida) ... ok
+test_travar_leitura (test_unidades.EstadoFilasUnidadeTest.test_travar_leitura) ... ok
+test_criar_motor (test_unidades.ModelosTest.test_criar_motor) ... ok
+test_de_e_em_milissegundos (test_unidades.ModelosTest.test_de_e_em_milissegundos) ... ok
+test_fabrica_de_sessoes (test_unidades.ModelosTest.test_fabrica_de_sessoes) ... ok
+test_conectar (test_unidades.MqttConfigTest.test_conectar) ... ok
+test_desconectar (test_unidades.MqttConfigTest.test_desconectar) ... ok
+test_evento (test_unidades.MqttConfigTest.test_evento) ... ok
+test_ler_evento (test_unidades.MqttConfigTest.test_ler_evento) ... ok
+test_momento_valido (test_unidades.MqttConfigTest.test_momento_valido) ... ok
+test_senha_de (test_unidades.MqttConfigTest.test_senha_de) ... ok
+test_status (test_unidades.MqttConfigTest.test_status) ... ok
+test_topico_status (test_unidades.MqttConfigTest.test_topico_status) ... ok
+test_agora (test_unidades.ObservabilidadeTest.test_agora) ... ok
+test_ao_conectar (test_unidades.ObservabilidadeTest.test_ao_conectar) ... ok
+test_ao_receber (test_unidades.ObservabilidadeTest.test_ao_receber) ... ok
+test_movimento_json (test_unidades.ObservabilidadeTest.test_movimento_json) ... ok
+test_pagina (test_unidades.ObservabilidadeTest.test_pagina) ... ok
+test_autenticar_hash (test_unidades.SenhasTest.test_autenticar_hash) ... ok
+test_gerar_hash_senha (test_unidades.SenhasTest.test_gerar_hash_senha) ... ok
+test_senha_confere (test_unidades.SenhasTest.test_senha_confere) ... ok
+test_ao_conectar (test_unidades.ServicosTest.test_ao_conectar) ... ok
+test_ao_receber (test_unidades.ServicosTest.test_ao_receber) ... ok
+test_receber_resultado (test_unidades.ServicosTest.test_receber_resultado) ... ok
+test_classificar (test_unidades_processador.ProcessadorTest.test_classificar) ... ok
+test_decidir_leitura (test_unidades_processador.ProcessadorTest.test_decidir_leitura) ... ok
+test_desconectar_sem_confirmar (test_unidades_processador.ProcessadorTest.test_desconectar_sem_confirmar) ... ok
+test_espera_de (test_unidades_processador.ProcessadorTest.test_espera_de) ... ok
+test_espera_texto (test_unidades_processador.ProcessadorTest.test_espera_texto) ... ok
+test_heartbeat_recente (test_unidades_processador.ProcessadorTest.test_heartbeat_recente) ... ok
+test_melhor_fila (test_unidades_processador.ProcessadorTest.test_melhor_fila) ... ok
+test_motivo_de (test_unidades_processador.ProcessadorTest.test_motivo_de) ... ok
+test_ocupacao_de (test_unidades_processador.ProcessadorTest.test_ocupacao_de) ... ok
+test_on_connect (test_unidades_processador.ProcessadorTest.test_on_connect) ... ok
+test_on_message (test_unidades_processador.ProcessadorTest.test_on_message) ... ok
+test_on_publish (test_unidades_processador.ProcessadorTest.test_on_publish) ... ok
+test_painel (test_unidades_processador.ProcessadorTest.test_painel) ... ok
+test_passagens_recentes (test_unidades_processador.ProcessadorTest.test_passagens_recentes) ... ok
+test_processar_mensagem_leituras (test_unidades_processador.ProcessadorTest.test_processar_mensagem_leituras) ... ok
+test_processar_mensagem_movimentos (test_unidades_processador.ProcessadorTest.test_processar_mensagem_movimentos) ... ok
+test_publicar (test_unidades_processador.ProcessadorTest.test_publicar) ... ok
+test_publicar_estado (test_unidades_processador.ProcessadorTest.test_publicar_estado) ... ok
+test_publicar_saida (test_unidades_processador.ProcessadorTest.test_publicar_saida) ... ok
+test_rajada_de_saidas_atrasadas_nao_zera_a_espera (test_unidades_processador.ProcessadorTest.test_rajada_de_saidas_atrasadas_nao_zera_a_espera) ... ok
+test_recomendar_fila (test_unidades_processador.ProcessadorTest.test_recomendar_fila) ... ok
+test_recomendar_fila_desvia_para_a_melhor (test_unidades_processador.ProcessadorTest.test_recomendar_fila_desvia_para_a_melhor) ... ok
+test_registrar (test_unidades_processador.ProcessadorTest.test_registrar) ... ok
+test_rejeitar (test_unidades_processador.ProcessadorTest.test_rejeitar) ... ok
+test_resultado_de (test_unidades_processador.ProcessadorTest.test_resultado_de) ... ok
+test_retransmitir (test_unidades_processador.ProcessadorTest.test_retransmitir) ... ok
+test_situacao_de (test_unidades_processador.ProcessadorTest.test_situacao_de) ... ok
+test_texto_valido (test_unidades_processador.ProcessadorTest.test_texto_valido) ... ok
+test_vazao_de (test_unidades_processador.ProcessadorTest.test_vazao_de) ... ok
+test_rotas_novas_e_tipo_validado (test_unidades_seguranca.AdminSegurancaUnidadeTest.test_rotas_novas_e_tipo_validado) ... ok
+test_entrar_bloqueado_nem_consulta_o_banco (test_unidades_seguranca.AppSegurancaTest.test_entrar_bloqueado_nem_consulta_o_banco) ... ok
+test_entrar_recusado_e_aceito (test_unidades_seguranca.AppSegurancaTest.test_entrar_recusado_e_aceito) ... ok
+test_middleware_registra_so_401_403_e_429 (test_unidades_seguranca.AppSegurancaTest.test_middleware_registra_so_401_403_e_429) ... ok
+test_sessao_guarda_quem_pediu (test_unidades_seguranca.AppSegurancaTest.test_sessao_guarda_quem_pediu) ... ok
+test_concorrencia_nao_passa_do_maximo (test_unidades_seguranca.LimitadorUnidadeTest.test_concorrencia_nao_passa_do_maximo) ... ok
+test_descarta_chaves_antigas_quando_acumula (test_unidades_seguranca.LimitadorUnidadeTest.test_descarta_chaves_antigas_quando_acumula) ... ok
+test_esquecer_devolver_e_limpar (test_unidades_seguranca.LimitadorUnidadeTest.test_esquecer_devolver_e_limpar) ... ok
+test_libera_ate_o_maximo_e_informa_a_espera (test_unidades_seguranca.LimitadorUnidadeTest.test_libera_ate_o_maximo_e_informa_a_espera) ... ok
+test_nao_marca_nenhuma_chave_se_uma_estourar (test_unidades_seguranca.LimitadorUnidadeTest.test_nao_marca_nenhuma_chave_se_uma_estourar) ... ok
+test_endereco_de (test_unidades_seguranca.LoginLimitadoTest.test_endereco_de) ... ok
+test_limite_por_login_e_por_endereco (test_unidades_seguranca.LoginLimitadoTest.test_limite_por_login_e_por_endereco) ... ok
+test_login_aceito_devolve_a_tentativa (test_unidades_seguranca.LoginLimitadoTest.test_login_aceito_devolve_a_tentativa) ... ok
+test_ao_vivo_inclui_as_recusas_do_broker (test_unidades_seguranca.MetricasUnidadeTest.test_ao_vivo_inclui_as_recusas_do_broker) ... ok
+test_arredonda_e_calcula_a_idade_da_pendente (test_unidades_seguranca.MetricasUnidadeTest.test_arredonda_e_calcula_a_idade_da_pendente) ... ok
+test_rota_valida_o_periodo (test_unidades_seguranca.MetricasUnidadeTest.test_rota_valida_o_periodo) ... ok
+test_sem_dados (test_unidades_seguranca.MetricasUnidadeTest.test_sem_dados) ... ok
+test_arquivo_trocado_e_lido_do_inicio (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_arquivo_trocado_e_lido_do_inicio) ... ok
+test_erro_de_leitura_nao_para_o_acompanhamento (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_erro_de_leitura_nao_para_o_acompanhamento) ... ok
+test_iniciar_sobe_uma_thread_daemon (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_iniciar_sobe_uma_thread_daemon) ... ok
+test_interpretar (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_interpretar) ... ok
+test_primeira_leitura_comeca_perto_do_fim (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_primeira_leitura_comeca_perto_do_fim) ... ok
+test_recentes_limitadas_a_20 (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_recentes_limitadas_a_20) ... ok
+test_situacao_por_janela (test_unidades_seguranca.RecusasBrokerUnidadeTest.test_situacao_por_janela) ... ok
+test_falha_no_banco_nao_derruba_a_resposta (test_unidades_seguranca.RegistrarNegadoTest.test_falha_no_banco_nao_derruba_a_resposta) ... ok
+test_grava_so_os_campos_permitidos_e_corta_os_longos (test_unidades_seguranca.RegistrarNegadoTest.test_grava_so_os_campos_permitidos_e_corta_os_longos) ... ok
+test_limite_de_registros_por_endereco (test_unidades_seguranca.RegistrarNegadoTest.test_limite_de_registros_por_endereco) ... ok
+test_tipo_pelo_status_e_pelo_login (test_unidades_seguranca.RegistrarNegadoTest.test_tipo_pelo_status_e_pelo_login) ... ok
+
+----------------------------------------------------------------------
+Ran 119 tests in 10.676s
+
+OK
+Mensagem rejeitada em fila/fila-a/leitura: leitura-expirada
+Leitura 1ab27bc6a1a64485ba26e0db5eae9ed7 na fila-a, ingresso 8FC6E0308DDA: aceito
+Leitura 980c893800ad4767acb5f09431c5f807 na fila-a, ingresso 6D089BDF851C: aceito
+Falha no reconhecimento: AWS fora
+Fila descoberta: fila-a (1 no total)
+Fila fila-a sem dados atualizados - mantendo recomendação anterior
+[92m● VERDE[0m  fila-a entrou em operação
+Leitura leitura-0 na fila-a, ingresso ING-1: aceito
+Leitura leitura-0 na fila-a, ingresso ING-1: aceito
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-1 na fila-a, ingresso ING-1: recusado (ingresso-ja-usado)
+Leitura leitura-1 na fila-a, ingresso ING-1: recusado (ingresso-ja-usado)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-2 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Leitura leitura-2 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-3 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Leitura leitura-3 na fila-a, ingresso ING-2: recusado (rosto-nao-confere)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-4 na fila-a, ingresso NAO-EXISTE: recusado (ingresso-inexistente)
+Leitura leitura-4 na fila-a, ingresso NAO-EXISTE: recusado (ingresso-inexistente)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-5 na fila-a, ingresso ING-2: indeterminado (falha-reconhecimento)
+Leitura leitura-5 na fila-a, ingresso ING-2: indeterminado (falha-reconhecimento)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura leitura-6 na fila-a, ingresso ING-2: recusado (validador-nao-autorizado)
+Leitura leitura-6 na fila-a, ingresso ING-2: recusado (validador-nao-autorizado)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Leitura atrasada-0 na fila-a, ingresso ING-3: indeterminado (sem-resposta-processador)
+Mensagem rejeitada em fila/fila-a/leitura: duplicado
+Mensagem rejeitada em fila/fila-a/leitura: leitura-expirada
+Mensagem rejeitada em fila/fila-a/leitura: leitura-incompleta
+Mensagem rejeitada em fila/fila-a/leitura: leitura-incompleta
+Mensagem rejeitada em fila/fila-a/heartbeat: fora-do-contrato

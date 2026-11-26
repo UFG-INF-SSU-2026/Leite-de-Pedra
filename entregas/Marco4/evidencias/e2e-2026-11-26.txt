@@ -1,0 +1,107 @@
+1. Contas (rostos gerados por IA, cadastrados no Rekognition pelo backend)
+  conta criada: e2e-admin
+  conta criada: e2e-validador
+  conta criada: e2e-cliente-1
+  conta criada: e2e-cliente-2
+  conta criada: e2e-cliente-3
+  conta criada: e2e-cliente-4
+  conta criada: e2e-cliente-5
+2. Componentes no ar
+  ok: produtor online
+  ok: consumidor online
+  ok: processador online
+  ok: backend online
+  ok: heartbeat das duas filas chegando do Wokwi
+3. Compra dos ingressos
+  5 ingressos comprados
+4. Filas zeradas
+  ok: fila-a vazia
+  ok: fila-b vazia
+5. Lotando a fila-a com 5 pessoas pelo sensor de entrada do Wokwi
+  ok: fila-a com 5 pessoas
+  ok: fila-a bloqueada e recomendando a fila-b
+6. e2e-cliente-4 e e2e-cliente-5 seguem a recomendação e entram na fila-b
+  ok: fila-b com 2 pessoas
+7. Catraca da fila-a: rosto no Rekognition, decisão no processador, reação no consumidor
+Traceback (most recent call last):
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/tests/e2e_completo.py", line 262, in <module>
+    main()
+    ~~~~^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/tests/e2e_completo.py", line 218, in main
+    passar_na_catraca(validador, admin, ingressos[c1], c1, "aceito")
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/tests/e2e_completo.py", line 153, in passar_na_catraca
+    esperar(f"{login_do_rosto} na {fila_id}: {esperado}{f' ({motivo})' if motivo else ''}, "
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            f"consumidor reagiu com {acao}",
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            lambda e: (fila(e, fila_id).get("ultimaReacao") or {}).get("resultadoId") == resultado_id
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            and fila(e, fila_id)["ultimaReacao"]["acao"] == acao, admin, limite=15)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jaime/projetos/ufg/Leite-de-Pedra/tests/e2e_completo.py", line 125, in esperar
+    raise AssertionError(f"{descricao}: não aconteceu em {limite} s.\n"
+                         f"{json.dumps(estado.get('filas'), indent=1, default=str)}")
+AssertionError: e2e-cliente-1 na fila-a: aceito, consumidor reagiu com liberar: não aconteceu em 15 s.
+[
+ {
+  "filaId": "fila-a",
+  "estado": {
+   "filaId": "fila-a",
+   "semaforo": "bloqueada",
+   "ocupacao": 5,
+   "sentidoRecomendado": "fila-b",
+   "tempoEsperaEstimado": null
+  },
+  "recomendacao": {
+   "filaId": "fila-a",
+   "semaforo": "bloqueada",
+   "ocupacao": 5,
+   "sentidoRecomendado": "fila-b",
+   "motivo": "fila-a est\u00e1 VERMELHO (35s de espera, 5 na fila); fila-b est\u00e1 VERDE (0s de espera, 0 na fila)",
+   "tempoEsperaEstimado": 35
+  },
+  "ultimaLeitura": {
+   "filaId": "fila-a",
+   "ingressoId": "E5F616FA9F24",
+   "validadorId": "a56f841fca494ef5992a3d055a97c7d0",
+   "reconhecimento": "reconhecido",
+   "validoAte": 1795665228281,
+   "usuarioReconhecido": "f92fb0b981784c2895ced8d694f021e4",
+   "recebidoEm": "2026-11-26T03:53:38.282223+00:00"
+  },
+  "ultimoResultado": {
+   "filaId": "fila-a",
+   "leituraId": "f69335ad0e044dccbc17bc7bfb003f61",
+   "ingressoId": "E5F616FA9F24",
+   "resultado": "aceito",
+   "recebidoEm": "2026-11-26T03:53:38.319407+00:00"
+  },
+  "ultimaReacao": null,
+  "segundosSemHeartbeat": 2.650169,
+  "enlaceAtivo": true
+ },
+ {
+  "filaId": "fila-b",
+  "estado": {
+   "filaId": "fila-b",
+   "semaforo": "livre",
+   "ocupacao": 2,
+   "sentidoRecomendado": "fila-b",
+   "tempoEsperaEstimado": 14
+  },
+  "recomendacao": {
+   "filaId": "fila-b",
+   "semaforo": "livre",
+   "ocupacao": 0,
+   "sentidoRecomendado": "fila-b",
+   "motivo": "fila-b est\u00e1 VERDE (0s de espera, 0 na fila): sem motivo para desviar",
+   "tempoEsperaEstimado": 0
+  },
+  "ultimaLeitura": null,
+  "ultimoResultado": null,
+  "ultimaReacao": null,
+  "segundosSemHeartbeat": 2.074192,
+  "enlaceAtivo": true
+ }
+]

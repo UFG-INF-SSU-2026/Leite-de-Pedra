@@ -1,0 +1,34 @@
+1. Contas (rostos gerados por IA, cadastrados no Rekognition pelo backend)
+2. Componentes no ar
+  ok: produtor online
+  ok: consumidor online
+  ok: processador online
+  ok: backend online
+  ok: heartbeat das duas filas chegando do Wokwi
+3. Compra dos ingressos
+  5 ingressos comprados
+4. Filas zeradas
+  ok: fila-a vazia
+  ok: fila-b vazia
+5. Lotando a fila-a com 5 pessoas pelo sensor de entrada do Wokwi
+  ok: fila-a com 5 pessoas
+  ok: fila-a bloqueada e recomendando a fila-b
+6. e2e-cliente-4 e e2e-cliente-5 seguem a recomendação e entram na fila-b
+  ok: fila-b com 2 pessoas
+7. Catraca da fila-a: rosto no Rekognition, decisão no processador, reação no consumidor
+  ok: e2e-cliente-1 na fila-a: aceito, consumidor reagiu com liberar
+  ok: e2e-cliente-1 na fila-a: recusado (ingresso-ja-usado), consumidor reagiu com barrar
+  ok: e2e-cliente-3 na fila-a: recusado (rosto-nao-confere), consumidor reagiu com barrar
+  ok: e2e-cliente-2 na fila-a: aceito, consumidor reagiu com liberar
+  ok: e2e-cliente-3 na fila-a: aceito, consumidor reagiu com liberar
+8. Catraca da fila-b
+  ok: e2e-cliente-4 na fila-b: aceito, consumidor reagiu com liberar
+9. Processador fora do ar durante uma leitura na fila-b (o caso do 504)
+  ok: 504, decidir manualmente
+  ok: processador de volta descartou a leitura vencida
+  ok: e2e-cliente-5 na fila-b: aceito, consumidor reagiu com liberar
+10. Esvaziando as filas
+  ok: fila-a vazia e livre
+  ok: fila-b vazia e livre
+
+Tudo certo. Leituras: {'aceito': 6, 'recusado': 2, 'indeterminado': 1}; ingressos: {'emitidos': 11, 'usados': 6, 'cancelados': 1, 'disponiveis': 4}
