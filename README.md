@@ -224,8 +224,10 @@ com o `correlation_id` do evento que provocou o recálculo. `payload`:
 
 **`fila/{id}/estado`** contém `filaId`, `semaforo`, `ocupacao`,
 `sentidoRecomendado` e `tempoEsperaEstimado`. É publicado com QoS 1 e `retain`
-para que o consumidor recupere o estado ao reconectar. A ocupação e o
-histórico ficam no TimescaleDB.
+para que o consumidor recupere o estado ao reconectar. O consumidor o assina
+com QoS 0: como o estado é retido, chega na reconexão, e o broker não guarda
+cada mudança antiga enquanto ele está fora. Só `resultado` é assinado com QoS 1,
+na sessão persistente. A ocupação e o histórico ficam no TimescaleDB.
 Antes de o sensor de saída registrar duas passagens, a espera usa 7 s por pessoa; depois passa a
 usar a vazão observada. Assim o semáforo já reage ao crescimento da fila.
 

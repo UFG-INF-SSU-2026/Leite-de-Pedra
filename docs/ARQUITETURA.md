@@ -442,6 +442,25 @@ outbox**:
 - `estado` e `recomendacao` não passam pelo outbox: são retidos no broker e
   republicados a cada mudança, então se corrigem sozinhos.
 
+No consumidor (o ESP32 do LCD e dos LEDs), a sessão também é persistente, mas
+o QoS depende do tópico:
+
+- `resultado` é assinado com QoS 1. Um resultado publicado enquanto ele está
+  fora é guardado pelo broker e entregue na volta, e a reação da catraca não
+  se perde. A recuperação do 504 depende só deste tópico.
+- `estado` é assinado com QoS 0. O broker não guarda mensagens QoS 0 para um
+  cliente desconectado, então as mudanças antigas não se acumulam. O estado
+  atual chega mesmo assim, porque é retido e o consumidor assina de novo a cada
+  conexão. Uma mensagem só se perde, com a conexão aberta, se ela cair naquele
+  instante; aí vale a mesma regra: reconecta, assina e recebe o retido.
+- O motivo: com QoS 1, depois de horas desligado, o consumidor recebia uma
+  fila de estados antigos, um por um, antes do resultado esperado, e a reação
+  atrasava (falha do ponta a ponta de 26/11, em
+  `entregas/Marco4/testes.md`). Os estados intermediários não têm uso: o LCD
+  mostra só o atual.
+- O processador continua publicando `estado` com QoS 1 e `retain`. O QoS 0
+  vale só na entrega a este assinante; a observabilidade e o backend não mudam.
+
 ```mermaid
 sequenceDiagram
     participant P as Produtor
