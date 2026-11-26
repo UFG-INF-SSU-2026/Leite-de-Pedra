@@ -15,7 +15,7 @@ Os artefatos deste marco ficam em [`entregas/Marco4/`](entregas/Marco4/). Este R
 
 | Entrega | Onde | Situação nesta versão |
 |---|---|---|
-| Diagrama | [fluxo neste README](#fluxo) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#visão-geral) | atual |
+| Diagrama | [`docs/diagrama.html`](docs/diagrama.html), [fluxo neste README](#fluxo) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#visão-geral) | atual |
 | Contratos | [payloads](#payloads) e [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md#contrato-das-mensagens) | envelope, tópicos e validação |
 | Verificação do enunciado | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md#verificação-pedida-no-enunciado) | passos, esperado, observado e evidência das quatro verificações |
 | Testes e resultados | [`entregas/Marco4/testes.md`](entregas/Marco4/testes.md) | comando, módulos e saídas em `entregas/Marco4/evidencias/` |
