@@ -17,7 +17,7 @@ Fecha o que deu para fazer em 25 de novembro de 2026 sem APK e sem commit. O res
 
 | Pendência | Por que não foi fechada agora | O que entregar |
 |---|---|---|
-| APK Android instalável | Não há `android/`, `eas.json` nem arquivo `.apk`. Expo Go não é o pacote do app. | Gerar o APK (por exemplo `npx expo run:android` ou um build de pré-visualização), colocá-lo no repositório e mostrar instalação em celular ou emulador, integrado ao backend em HTTPS. |
+| ~~APK Android instalável~~ | Feito em 26/11: build EAS (perfil `apk` de `mobile/eas.json`), com download e página do build linkados no `README.md` da raiz. Aponta para `https://192.168.3.3:8444` e confia na CA do projeto. O `.apk` (115 MB) não entra no Git por passar do limite do GitHub. | Falta mostrar a instalação em celular ou emulador, com o backend em HTTPS. |
 | Teste automatizado do APK | O enunciado desta tarefa pediu para não incluir teste do que não existe. | Se o grupo quiser teste do app depois do APK, isso é trabalho novo. A suíte atual continua válida para o servidor. |
 | Contribuições dos outros três integrantes | `contribuicoes.md` tem só a de Caio Castro Miranda. | Cada um escreve a própria parte nesse arquivo. |
 | Revisão do artigo pelo grupo | O PDF foi gerado a partir do código e da execução dos testes, com assistência registrada em `uso-de-ia.md`. | Reler, corrigir o que o grupo não assumir e conferir se o PDF ficou entre 10 e 15 páginas depois de qualquer edição. |
@@ -26,4 +26,4 @@ Fecha o que deu para fazer em 25 de novembro de 2026 sem APK e sem commit. O res
 | Ensaio de desempenho e de energia | Não há medição. A declaração está em `limitacoes.md`; o enunciado pede declarar, não apresentar número que não foi medido. | Só incluir número novo se houver medição de verdade. |
 | `GRANT` de `movimentos` para o papel `backend` no banco `filas` | `banco/ingressos.sql` já declara `GRANT SELECT, INSERT ON movimentos TO backend`. O volume de teste estava sem essa concessão e os dois testes do 504 falhavam. A concessão foi aplicada só em `filas_teste`. | Confirmar o mesmo `GRANT` no banco `filas` se o volume for antigo; sem ele, o HTTP 504 da catraca quebra em vez de gravar o indeterminado. |
 
-A versão que define a nota do Marco 4 é a de 27/11. A de 11/12 entra no projeto final. O APK e as contribuições dos outros três integrantes são o que separa esta árvore do que o enunciado pede por completo. A apresentação está no [Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing).
+A versão que define a nota do Marco 4 é a de 27/11. A de 11/12 entra no projeto final. A demonstração do APK instalado e as contribuições que faltam são o que separa esta árvore do que o enunciado pede por completo. A apresentação está no [Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing).

@@ -25,9 +25,14 @@ Os artefatos deste marco ficam em [`entregas/Marco4/`](entregas/Marco4/). Este R
 | Uso de IA na redação destes arquivos | [`entregas/Marco4/uso-de-ia.md`](entregas/Marco4/uso-de-ia.md) | rascunho assistido; a validação é do grupo |
 | Contribuições individuais | [`entregas/Marco4/contribuicoes.md`](entregas/Marco4/contribuicoes.md) | Caio Castro Miranda; as demais ainda não foram escritas |
 | Vídeo do Marco 4 | [apresentação no Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing) | fora do repositório |
-| Pendências do marco | [`entregas/Marco4/pendencias.md`](entregas/Marco4/pendencias.md) | APK e as contribuições que ainda não foram escritas |
+| Pendências do marco | [`entregas/Marco4/pendencias.md`](entregas/Marco4/pendencias.md) | demonstração do APK instalado e as contribuições que ainda não foram escritas |
 
-Não há APK no repositório. A suíte automatizada não testa APK. O caminho do app que atende o canal protegido é o HTTPS de [`mobile/README.md`](mobile/README.md). `BACKEND_SEM_TLS=1` deixa senhas, tokens e fotos sem criptografia e não atende essa verificação.
+APK Android (build EAS, perfil `apk` de [`mobile/eas.json`](mobile/eas.json)):
+
+- Download: https://expo.dev/artifacts/eas/mliRI6fgdxhLD4d3SOMvCbn6SBkUzu_ad_wuEZ8r5Ow.apk
+- Página do build: https://expo.dev/accounts/britojp/projects/leite-de-pedra/builds/3fb5be0b-10be-47fd-9982-faa0557cc10d
+
+O APK fala com `https://192.168.3.3:8444`, então o backend precisa estar em HTTPS (sem `BACKEND_SEM_TLS=1`) nesse IP. Ele já confia na CA do projeto. O arquivo não fica no repositório: tem 115 MB e passa do limite do GitHub. A suíte automatizada não testa o APK. O caminho do app que atende o canal protegido é o HTTPS de [`mobile/README.md`](mobile/README.md). `BACKEND_SEM_TLS=1` deixa senhas, tokens e fotos sem criptografia e não atende essa verificação.
 
 ## Estrutura do repositório
 
@@ -691,4 +696,4 @@ Se precisar renovar apenas a CA e o certificado do broker, preserve as senhas co
 | [`entregas/Marco1/`](entregas/Marco1/) | Protótipos individuais no Wokwi, um por integrante, com relatório e evidências dos testes. |
 | [`entregas/Marco2/`](entregas/Marco2/) | Primeira integração produtor → MQTT → processador, com README e roteiro de demonstração próprios. |
 | [`entregas/Marco3/`](entregas/Marco3/) | Apresentação de segurança (TLS, autenticação e ACL), aberta direto no navegador (os terminais ao vivo dependiam do console da demo, removido). O código do Marco 3 é o próprio repositório. |
-| [`entregas/Marco4/`](entregas/Marco4/) | Marco 4: artigo, apresentação em vídeo, evidência dos testes, limitações, declaração de uso de IA, contribuições individuais e a lista do que ainda falta (APK). |
+| [`entregas/Marco4/`](entregas/Marco4/) | Marco 4: artigo, apresentação em vídeo, evidência dos testes, limitações, declaração de uso de IA, contribuições individuais e a lista do que ainda falta. |

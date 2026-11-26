@@ -17,8 +17,9 @@ As rotas ficam em `src/app/`; o resto (API, sessão, componentes, câmera) em `s
 
 Precisa do backend no ar (`docker compose up -d` na raiz) e de Node 22.13 ou
 superior. O caminho abaixo é o que atende o canal protegido: HTTPS, com o
-celular conferindo a CA do projeto. Não há APK nesta entrega; o app sobe pelo
-Expo Go ou por um simulador.
+celular conferindo a CA do projeto. O APK Android está linkado no
+[`README.md`](../README.md) da raiz; fora dele, o app sobe pelo Expo Go ou
+por um simulador.
 
 ```
 npm install
