@@ -11,6 +11,7 @@
       "bundleIdentifier": "com.britojp.leite-de-pedra"
     },
     "android": {
+      "package": "com.britojp.leitedepedra",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -34,11 +35,18 @@
         {
           "cameraPermission": "O Leite de Pedra usa a câmera para cadastrar o seu rosto, que libera a sua entrada no evento."
         }
-      ]
+      ],
+      "./plugins/ca-do-projeto"
     ],
     "scheme": "leitedepedra",
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "33936690-b650-4fec-85b3-12ec5aa6808c"
+      }
+    },
+    "owner": "britojp"
   }
 }
