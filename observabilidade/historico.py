@@ -10,6 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from sqlalchemy import and_, func, select
+from sqlalchemy.orm import aliased
 
 from modelos import (Estado, Fila, Movimento, Saida, criar_motor, espera_por_minuto,
                      fabrica_de_sessoes, movimentos_por_minuto)
@@ -116,3 +117,44 @@ def estados(fila: str | None = Query(None, max_length=40),
         return pagina(s, consulta, limite, deslocamento, lambda r: {
             "momento": r[0].momento, "filaId": r[0].fila_id, "semaforo": r[0].semaforo,
             "ocupacao": r[0].ocupacao, "esperaSegundos": r[0].espera_segundos})
+
+
+@rotas.get("/metricas")
+def metricas(minutos: int = Query(60, ge=1, le=1440)):
+    """Tempo da leitura à decisão, catracas sem resposta (504) e resultados por publicar.
+
+    O tempo vai da leitura publicada pelo backend à decisão gravada pelo
+    processador (os dois relógios são os da mesma máquina). Não inclui o caminho
+    de volta do resultado até a catraca, nem as leituras encerradas no 504, que
+    o backend grava sem decisão do processador.
+    """
+    desde = datetime.now(timezone.utc) - timedelta(minutes=minutos)
+    leitura, decisao = aliased(Movimento), aliased(Movimento)
+    duracao = func.extract("epoch", decisao.momento - leitura.momento) * 1000
+    with sessao() as s:
+        tempos = s.execute(
+            select(func.count(), func.avg(duracao),
+                   func.percentile_cont(0.5).within_group(duracao),
+                   func.percentile_cont(0.95).within_group(duracao), func.max(duracao))
+            .select_from(decisao)
+            .join(leitura, and_(leitura.evento_id == decisao.evento_id, leitura.tipo == "leitura"))
+            .where(decisao.tipo == "resultado", decisao.origem == "processador",
+                   decisao.momento > desde)).one()
+        sem_resposta = (Movimento.tipo == "resultado") & (Movimento.motivo == "sem-resposta-processador")
+        sem_resposta_periodo, sem_resposta_total = s.execute(select(
+            func.count().filter(Movimento.momento > desde), func.count())
+            .where(sem_resposta)).one()
+        pendentes, mais_antiga = s.execute(
+            select(func.count(), func.min(Saida.criado_em)).where(Saida.publicado_em.is_(None))).one()
+
+    def ms(valor):
+        return None if valor is None else round(float(valor))
+
+    return {
+        "minutos": minutos,
+        "leituraAteDecisao": {"quantidade": tempos[0], "mediaMs": ms(tempos[1]), "p50Ms": ms(tempos[2]),
+                              "p95Ms": ms(tempos[3]), "maximoMs": ms(tempos[4])},
+        "semResposta": {"noPeriodo": sem_resposta_periodo, "total": sem_resposta_total},
+        "saidaPendente": {"quantidade": pendentes, "maisAntigaSegundos": None if mais_antiga is None else
+                          round((datetime.now(timezone.utc) - mais_antiga).total_seconds())},
+    }

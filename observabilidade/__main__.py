@@ -6,11 +6,13 @@ import uvicorn
 
 from mqtt_config import conectar, desconectar
 
+from . import recusas_broker
 from .app import app, cliente_mqtt
 
 # ponytail: HTTP sem TLS, aceitável só porque não sai da máquina nem da rede do compose.
 conectar(cliente_mqtt, "observador", assincrono=True)
 cliente_mqtt.loop_start()
+recusas_broker.iniciar()
 try:
     uvicorn.run(app, host=os.getenv("OBSERVABILIDADE_HOST", "127.0.0.1"),
                 port=int(os.getenv("OBSERVABILIDADE_PORTA", "8090")),

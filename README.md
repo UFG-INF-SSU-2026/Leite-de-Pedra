@@ -446,7 +446,17 @@ certificado do banco e gera as senhas de `admin` (o superusuário),
 `processador`, `backend`, `painel` e `observador` em `.local/banco`. Um banco
 criado antes do app precisa de `./banco/atualizar-banco.sh` uma vez; um criado
 antes da observabilidade, de `./banco/adicionar-observador.sh` (idempotente:
-cria o papel `observador`, só de leitura, e a tabela `saida`).
+cria o papel `observador`, só de leitura, e a tabela `saida`); um criado antes
+do registro de acessos recusados, de `./banco/adicionar-seguranca.sh`
+(idempotente: cria a tabela `eventos_seguranca`, onde o backend só insere e o
+painel só lê).
+
+O backend limita o login a 5 falhas por login e 50 por endereço em 5 minutos
+(HTTP 429 com `Retry-After`) e grava cada login recusado ou bloqueado, pedido
+sem login (401) e acesso negado (403), sem senha nem token; o painel os mostra
+na aba Auditoria. A visão geral mostra as conexões que o broker recusou (lidas
+de `.local/mosquitto/mosquitto.log`) e as métricas da última hora: tempo da
+leitura até a decisão, catracas sem resposta (504) e resultados por publicar.
 
 O script se recusa a sobrescrever uma configuração existente. Os arquivos de
 senha individuais são lidos diretamente pelos clientes e têm permissão `0600`.
@@ -639,10 +649,13 @@ Para ver um **firmware sem a senha** tentando entrar, compile o ambiente
 `produtor/intruso/wokwi.toml`. Ele usa o mesmo circuito dos sensores e a CA
 (que é pública), mas uma senha inventada para o usuário `produtor`. O serial
 mostra `Falha MQTT: ... (retorno 5)` a cada 3 s, e o log do broker registra
-`wokwi-intruso ... disconnected: not authorised`. Nenhuma contagem chega ao
+`produtor ... disconnected: not authorised` (o broker usa o usuário como
+client id, então não aparece `wokwi-intruso`). Nenhuma contagem chega ao
 processador.
 
-Para testar também a restrição de leitura com o broker em execução:
+Para testar também a restrição de leitura com o broker em execução (o teste
+derruba por um instante os ESP32 `produtor` e a observabilidade, que
+reconectam sozinhos):
 
 ```
 python3 broker/testar-acl.py
