@@ -229,6 +229,13 @@ class ProcessadorTest(unittest.TestCase):
         self.assertEqual(self.p["vazao_de"]("fila-a", self.passagens((12, 2), (8, 1), (4, 0))), 0.25)
         self.assertEqual(self.p["vazao_de"]("fila-a", self.passagens((12, 0), (2, 0))), 0)  # fila vazia
 
+    def test_rajada_de_saidas_atrasadas_nao_zera_a_espera(self):
+        # Depois de uma queda, as saídas guardadas chegam com milissegundos de diferença.
+        agora = self.passagens(*[(i * 0.002, 15 + i) for i in range(4, -1, -1)])
+        self.p["entradas"]["fila-a"], self.p["saidas"]["fila-a"] = 20, 5
+        self.assertEqual(self.p["vazao_de"]("fila-a", agora), 0)
+        self.assertEqual(self.p["espera_de"]("fila-a", agora), 15 * self.p["TEMPO_PASSAGEM_INICIAL"])
+
     def test_espera_de(self):
         agora = self.passagens()
         self.assertEqual(self.p["espera_de"]("fila-a", agora), 0)
