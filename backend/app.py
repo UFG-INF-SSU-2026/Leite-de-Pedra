@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -28,7 +29,7 @@ from modelos import Ingresso, Movimento, Usuario
 from mqtt_config import conectar, desconectar, evento
 from senhas import autenticar_hash, gerar_hash_senha
 
-from . import admin
+from . import admin, seguranca
 from .autenticacao import (DURACAO_TOKEN_SEGUNDOS, emitir_token, ler_chave_jwt, sessao,
                            sessao_de_validador)
 from .servicos import (BUCKET_FOTOS, COLECAO_ROSTOS, RAIZ, cliente_mqtt, receber_resultado,  # noqa: F401
@@ -71,6 +72,8 @@ async def limitar_corpo_e_proteger(request: Request, proximo):
     if int(request.headers.get("content-length") or 0) > TAMANHO_MAXIMO_CORPO:
         return JSONResponse({"detail": "Corpo grande demais."}, status_code=413)
     resposta = await proximo(request)
+    if resposta.status_code in seguranca.TIPOS_POR_STATUS:
+        await run_in_threadpool(seguranca.registrar_negado, request, resposta.status_code)
     resposta.headers["Cache-Control"] = "no-store"
     resposta.headers["Strict-Transport-Security"] = "max-age=31536000"
     if request.url.path.startswith("/painel"):
@@ -160,11 +163,19 @@ def cadastrar(dados: Cadastro):
 
 @app.post("/sessoes")
 def entrar(dados: Credenciais, request: Request):
+    endereco = seguranca.endereco_de(request)
+    request.state.login_tentado = dados.login
+    # Contada antes de conferir a senha: tentativas em paralelo não passam juntas.
+    espera = seguranca.reservar_login(endereco, dados.login)
+    if espera:
+        raise HTTPException(429, "Muitas tentativas. Tente de novo mais tarde.",
+                            headers={"Retry-After": str(espera)})
     with sessao_backend() as s:
         usuario = s.scalar(select(Usuario).where(Usuario.login == dados.login))
     if not autenticar_hash(dados.senha, usuario.senha_hash if usuario else None):
         time.sleep(ATRASO_APOS_LOGIN_RECUSADO_SEGUNDOS)
         raise HTTPException(401, "Login ou senha inválidos.")
+    seguranca.login_aceito(endereco, dados.login)
     return {"token": emitir_token(usuario.usuario_id, usuario.papel, request.app.state.chave_jwt),
             "papel": usuario.papel, "expiraEmSegundos": DURACAO_TOKEN_SEGUNDOS}
 

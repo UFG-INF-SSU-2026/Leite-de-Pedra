@@ -10,7 +10,7 @@ registradas em auditoria.
 import json
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from botocore.exceptions import ClientError
@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select, update
 
-from modelos import Auditoria, Ingresso, Movimento, Usuario
+from modelos import Auditoria, EventoSeguranca, Ingresso, Movimento, Usuario
 
 from . import servicos
 from .autenticacao import sessao_de_admin
@@ -84,7 +84,7 @@ def _repassar(caminho):
 
 
 # Ao vivo e histórico operacional: da observabilidade, que lê o broker e o banco.
-for _caminho in ("ao-vivo", "historico", "movimentos", "estados"):
+for _caminho in ("ao-vivo", "historico", "movimentos", "estados", "metricas"):
     rotas.add_api_route(f"/{_caminho}", _repassar(_caminho), methods=["GET"])
 
 
@@ -237,3 +237,25 @@ def auditoria(limite: int = Limite, deslocamento: int = Deslocamento):
         return pagina(s, consulta, limite, deslocamento, lambda r: {
             "momento": r[0].momento, "admin": r[1], "acao": r[0].acao, "alvo": r[0].alvo,
             "detalhe": r[0].detalhe})
+
+
+TiposSeguranca = Literal["login-recusado", "login-bloqueado", "nao-autenticado", "acesso-negado"]
+
+
+@rotas.get("/seguranca")
+def eventos_de_seguranca(tipo: TiposSeguranca | None = None,
+                         limite: int = Limite, deslocamento: int = Deslocamento):
+    """Logins recusados, bloqueados e acessos negados na API, gravados pelo backend."""
+    consulta = select(EventoSeguranca).order_by(EventoSeguranca.momento.desc())
+    if tipo:
+        consulta = consulta.where(EventoSeguranca.tipo == tipo)
+    desde = datetime.now(timezone.utc) - timedelta(hours=24)
+    with sessao_painel() as s:
+        dados = pagina(s, consulta, limite, deslocamento, lambda r: {
+            "momento": r[0].momento, "tipo": r[0].tipo, "login": r[0].login,
+            "usuarioId": r[0].usuario_id, "endereco": r[0].endereco, "metodo": r[0].metodo,
+            "rota": r[0].rota})
+        dados["ultimas24h"] = dict(s.execute(
+            select(EventoSeguranca.tipo, func.count()).where(EventoSeguranca.momento > desde)
+            .group_by(EventoSeguranca.tipo)).all())
+    return dados

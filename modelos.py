@@ -1,7 +1,7 @@
 """Modelos SQLAlchemy das tabelas do TimescaleDB e conexão por papel.
 
 As tabelas, hypertables, agregados contínuos e permissões são criados por
-banco/esquema.sql e banco/ingressos.sql (recursos do TimescaleDB e GRANTs por
+banco/esquema.sql, banco/ingressos.sql e banco/seguranca.sql (recursos do TimescaleDB e GRANTs por
 coluna que o ORM não expressa); estes modelos só os mapeiam.
 """
 
@@ -140,6 +140,19 @@ class Auditoria(Base):
     acao: Mapped[str] = mapped_column(Text)
     alvo: Mapped[str] = mapped_column(Text)
     detalhe: Mapped[str | None] = mapped_column(Text)
+
+
+class EventoSeguranca(Base):
+    """Login recusado ou acesso negado na API (banco/seguranca.sql); o backend só insere."""
+    __tablename__ = "eventos_seguranca"
+    evento_seguranca_id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    momento: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
+    tipo: Mapped[str] = mapped_column(Text)
+    login: Mapped[str | None] = mapped_column(Text)
+    usuario_id: Mapped[str | None] = mapped_column(Text)
+    endereco: Mapped[str] = mapped_column(Text)
+    metodo: Mapped[str] = mapped_column(Text)
+    rota: Mapped[str] = mapped_column(Text)
 
 
 # Agregados contínuos (somente leitura, usados pelo dashboard de admin).

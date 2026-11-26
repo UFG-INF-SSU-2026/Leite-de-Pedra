@@ -20,6 +20,7 @@ SQL
 for banco in filas filas_teste; do
     psql -v ON_ERROR_STOP=1 -U postgres -d "$banco" -f /esquema.sql
     psql -v ON_ERROR_STOP=1 -U postgres -d "$banco" -f /ingressos.sql
+    psql -v ON_ERROR_STOP=1 -U postgres -d "$banco" -f /seguranca.sql
 done
 
 psql -v ON_ERROR_STOP=1 -U postgres -d filas_teste \

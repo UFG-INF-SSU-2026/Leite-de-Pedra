@@ -34,7 +34,7 @@ CHAVE = "k" * 32
 
 
 def requisicao(query=""):
-    return SimpleNamespace(url=SimpleNamespace(query=query),
+    return SimpleNamespace(url=SimpleNamespace(query=query), state=SimpleNamespace(),
                            app=SimpleNamespace(state=SimpleNamespace(chave_jwt=CHAVE)))
 
 

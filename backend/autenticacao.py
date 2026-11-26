@@ -30,10 +30,12 @@ def sessao(request: Request, credencial: HTTPAuthorizationCredentials = Depends(
     if credencial is None:
         raise HTTPException(401, "Entre com login e senha.")
     try:
-        return jwt.decode(credencial.credentials, request.app.state.chave_jwt, algorithms=["HS256"],
+        dados = jwt.decode(credencial.credentials, request.app.state.chave_jwt, algorithms=["HS256"],
                           options={"require": ["sub", "papel", "exp", "iat"]})
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Sessão inválida ou expirada. Entre de novo.")
+    request.state.usuario_id = dados["sub"]  # quem teve o acesso negado, se for o caso
+    return dados
 
 
 def sessao_de_validador(dados=Depends(sessao)):

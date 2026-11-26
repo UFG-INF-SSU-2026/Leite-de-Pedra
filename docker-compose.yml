@@ -43,6 +43,7 @@ services:
       - ./banco/inicializar.sh:/docker-entrypoint-initdb.d/inicializar.sh:ro
       - ./banco/esquema.sql:/esquema.sql:ro
       - ./banco/ingressos.sql:/ingressos.sql:ro
+      - ./banco/seguranca.sql:/seguranca.sql:ro
       - dados:/var/lib/postgresql/data
     # O PostgreSQL só aceita a chave TLS se ela pertencer ao usuário postgres com permissão 600.
     entrypoint:

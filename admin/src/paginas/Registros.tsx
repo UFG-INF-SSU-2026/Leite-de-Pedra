@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { chamar, type EstadoRegistrado, type Leitura, type Movimento, type RegistroAuditoria } from '../api'
+import { chamar, type EstadoRegistrado, type EventoSeguranca, type Leitura, type Movimento, type Pagina, type RegistroAuditoria } from '../api'
 import { Chip, Erro, Filtro, Id, Paginacao, Tabela } from '../componentes'
 import { dataHora, useLista } from '../dados'
 
@@ -115,10 +115,44 @@ const ACOES: Record<string, string> = {
   'mudar-papel': 'Mudou papel', 'cancelar-ingresso': 'Cancelou ingresso', 'ver-foto': 'Abriu foto',
 }
 
+const TIPOS_SEGURANCA: Record<string, string> = {
+  'login-recusado': 'Login recusado', 'login-bloqueado': 'Login bloqueado (muitas tentativas)',
+  'nao-autenticado': 'Sem login', 'acesso-negado': 'Acesso negado',
+}
+
+function AcessosRecusados() {
+  const [tipo, setTipo] = useState('')
+  const lista = useLista<EventoSeguranca>('/admin/seguranca', { tipo })
+  const dados = lista.dados as (Pagina<EventoSeguranca> & { ultimas24h: Record<string, number> }) | null
+  return (
+    <>
+      <h2>Acessos recusados</h2>
+      <p className="nota">Gravados pelo backend: senha errada, excesso de tentativas, pedido sem login e
+        conta sem permissão. Nunca a senha nem o token.
+        {dados && <> Últimas 24 h: {Object.entries(dados.ultimas24h).map(([t, n]) => `${TIPOS_SEGURANCA[t] ?? t} ${n}`).join(' · ') || 'nenhum'}.</>}
+      </p>
+      <div className="filtros">
+        <Filtro rotulo="Tipo" valor={tipo} mudar={setTipo} opcoes={Object.entries(TIPOS_SEGURANCA)} />
+      </div>
+      <Erro mensagem={lista.erro} />
+      <Tabela cabecalho={['Momento', 'Tipo', 'Login tentado', 'Conta', 'Endereço', 'Pedido']} vazio={!dados?.itens.length}>
+        {dados?.itens.map((e, i) => (
+          <tr key={e.momento + i}>
+            <td>{dataHora(e.momento)}</td><td>{TIPOS_SEGURANCA[e.tipo] ?? e.tipo}</td><td>{e.login ?? '–'}</td>
+            <td><Id valor={e.usuarioId} /></td><td><code>{e.endereco}</code></td><td><code>{e.metodo} {e.rota}</code></td>
+          </tr>
+        ))}
+      </Tabela>
+      {dados && <Paginacao total={dados.total} deslocamento={lista.deslocamento} mudar={lista.setDeslocamento} />}
+    </>
+  )
+}
+
 export function Auditoria() {
   const lista = useLista<RegistroAuditoria>('/admin/auditoria', {})
   return (
     <>
+      <h2>Ações dos administradores</h2>
       <Erro mensagem={lista.erro} />
       <Tabela cabecalho={['Momento', 'Admin', 'Ação', 'Alvo', 'Detalhe']} vazio={!lista.dados?.itens.length}>
         {lista.dados?.itens.map((a, i) => (
@@ -129,6 +163,7 @@ export function Auditoria() {
         ))}
       </Tabela>
       {lista.dados && <Paginacao total={lista.dados.total} deslocamento={lista.deslocamento} mudar={lista.setDeslocamento} />}
+      <AcessosRecusados />
     </>
   )
 }

@@ -101,8 +101,13 @@ export type FilaAoVivo = {
   segundosSemHeartbeat: number | null
   enlaceAtivo: boolean
 }
+export type RecusaBroker = { momento: string; motivo: string; usuario: string | null; endereco: string }
 export type AoVivo = {
   brokerConectado: boolean
+  recusasBroker: {
+    logDisponivel: boolean; minutos: number; total: number
+    porMotivo: Record<string, number>; porUsuario: Record<string, number>; recentes: RecusaBroker[]
+  }
   filas: FilaAoVivo[]
   componentes: { source: string; online: boolean; atualizadoEm: string }[]
   rejeitadas: Record<string, number>
@@ -114,4 +119,14 @@ export type AoVivo = {
 export type MinutoHistorico = {
   minuto: string; filaId: string; entradas: number; saidas: number; aceitos: number; recusados: number
   indeterminados: number; esperaMedia: number | null; esperaMaxima: number | null; ocupacaoMaxima: number | null
+}
+export type Metricas = {
+  minutos: number
+  leituraAteDecisao: { quantidade: number; mediaMs: number | null; p50Ms: number | null; p95Ms: number | null; maximoMs: number | null }
+  semResposta: { noPeriodo: number; total: number }
+  saidaPendente: { quantidade: number; maisAntigaSegundos: number | null }
+}
+export type EventoSeguranca = {
+  momento: string; tipo: string; login: string | null; usuarioId: string | null
+  endereco: string; metodo: string; rota: string
 }
