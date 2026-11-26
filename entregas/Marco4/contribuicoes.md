@@ -51,6 +51,7 @@ Definição do formato atual dos Markdown. O README deixa de ser um marco numera
 | `entregas/Marco4/uso-de-ia.md` | o que a redação destes arquivos usou de assistência |
 | `entregas/Marco4/contribuicoes.md` | esta lista |
 | `entregas/Marco4/pendencias.md` | o que o enunciado ainda pede e não está nesta versão |
+| [apresentação no Drive](https://drive.google.com/file/d/1IyoW87-bQh-Tf3qgKNgGXRloHaFUiPyJ/view?usp=sharing) | a gravação do Marco 4; o mp4 não entra no Git |
 | `mobile/README.md` | o canal do aplicativo, separado do roteiro do servidor |
 
 Principal contribuição: a regra com que o processador transforma ocupação e vazão em semáforo e em destino, com histerese na descida e desvio só para uma fila melhor; o teste em que a catraca não gasta o ingresso com o processador fora; e a organização dos Markdown para cada assunto ficar num arquivo só.
