@@ -120,8 +120,56 @@ Os commits são de 06/11 a 13/11/2026; o hash de cada item está entre parêntes
   - app no celular, ESP32 e testes.
 - `mobile/README.md` com o modo HTTP e como voltar ao HTTPS (`d002c88`).
 
-### Ainda não commitado
+## João Victor Braga Queiroz — 201810114
+
+Concepção do problema e da solução, requisitos, regras de contexto e tempo,
+sensoriamento e qualidade dos dados, e redação do artigo.
+
+### Concepção
+
+- Identificação do problema a partir da operação real de eventos com ingresso: o
+  gargalo da entrada é a distribuição do público no pico, não a capacidade
+  instalada.
+- Proposta da troca de tema do grupo, que abandonou a biblioteca inteligente com
+  RFID e passou a tratar balanceamento de fluxo de fila.
+- Desenho da solução: contagem de chegada e saída por fila, tempo de espera
+  estimado como grandeza apresentada, decisão por janela deslizante com histerese
+  e semáforo como linguagem para o público.
+- Definição da restrição que atravessa o projeto: o sistema recomenda(induz), nunca
+  trava nem aciona a catraca.
+
+### Requisitos
+
+- Levantamento das restrições de operação real usadas como critério de escopo:
+  capacidade por segmento de corredor, variação de iluminação ao longo do evento
+  e comportamento do público em pico.
+- Descarte de sensores e arquiteturas que não se sustentariam em campo.
+- Separação entre fidelidade de documentação e de protótipo, com os substitutos
+  declarados.
+
+### Sensoriamento e regras de tempo
+
+- Perfil de sensoriamento e qualidade nas atividades individuais.
+- Protótipo ESP32/Wokwi usado como demonstração do Marco 1.
+- Papel de produtor no Marco 2 e roteiros das demonstrações.
+- Definição do que conta como dado válido, de como a vazão é apurada, do ritmo de
+  reavaliação do estado e das condições em que a recomendação muda.
+
+### Artigo do Marco 4
+
+- Redação e fechamento do artigo em formato ABNT/UFG, junto à Caio Miranda.
+
+### Atuação no repositório
+
+- Commits de regra de contexto e tempo no Marco 2 (18/09), organização das
+  entregas por marco e README inicial do projeto (19 a 21/09).
+- Correção da vazão no processador no Marco 4 (`d0d3525`), que fazia as filas
+  aparecerem travadas durante a demonstração.
+
+Principal contribuição: a concepção do sistema e as regras que o sustentam — o
+problema, a solução, o que conta como dado válido, como a espera é estimada e
+quando a recomendação muda — além do artigo que descreve tudo isso.
 
 - Testes unitários sem banco e sem broker, 75 casos, cobrindo as funções de `senhas`, `mqtt_config`, `modelos`, `estado_filas`, backend, observabilidade e processador: `tests/test_unidades.py` e `tests/test_unidades_processador.py`.
 
-Principal contribuição: transformar o protótipo do Marco 3 no sistema completo do Marco 4. O ingresso com reconhecimento facial passou a ser decidido pelo processador, com a resposta garantida pela outbox. O usuário passou a ter o app no celular, e o administrador, o dashboard com o ao vivo e o histórico.
+### Ainda não commitado
